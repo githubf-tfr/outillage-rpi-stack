@@ -74,6 +74,12 @@ Portainer déployé en bootstrap via `rpi-stage`
 (`docker-compose-stack` + `docker_compose_stack_env_file`, ajouté le
 2026-07-22 pour ce besoin).
 
+## Dépôt GitHub
+
+- **URL** : https://github.com/githubf-tfr/outillage-rpi-stack
+- **Branche principale** : `main` (unique branche, tout va sur `main`)
+- Créé le 2026-07-22, premier commit : template Portainer bootstrap.
+
 ## Pas de README séparé
 
 Comme `rpi-nomade` (règle "un seul fichier de doc générique"), ce repo n'a
