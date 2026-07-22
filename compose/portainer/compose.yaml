@@ -1,0 +1,73 @@
+# compose/portainer/compose.yaml — template générique de stack Portainer.
+# Aucune valeur ici : tout passe par ${VAR}, résolues par le consommateur
+# (fichier .env déposé à côté, cf. portainer.env.example) — voir le CLAUDE.md
+# à la racine de ce repo pour le mécanisme complet.
+
+services:
+  portainer:
+    # Business Edition -- licence gratuite jusqu'à 3 noeuds. CE n'a pas de
+    # notion de licence ; passer à EE deverrouille les fonctionnalites sous
+    # licence sans rien changer au reste (meme codebase/CLI que CE).
+    image: portainer/portainer-ee:lts
+    container_name: portainer
+    restart: always
+    # Mot de passe admin pre-configure au demarrage -- pas de fenetre de 5 min
+    # ni de setup_token a recopier depuis les logs a chaque (re)install.
+    command: ["--admin-password-file", "/run/secrets/portainer_admin_password"]
+    secrets:
+      - portainer_admin_password
+    # Cle de licence EE -- pas de mecanisme "_FILE"/secrets Docker cote
+    # Portainer pour la licence (seulement env var ou flag CLI, doc
+    # officielle) -- passee via env_file plutot qu'en dur ici.
+    env_file:
+      - ./secrets/license.env
+    ports:
+      # PORTAINER_BIND_ADDR : IP sur laquelle exposer l'UI (9000). Eviter
+      # 0.0.0.0 si Portainer ne doit pas etre joignable depuis toutes les
+      # interfaces de l'hote (Docker ne passe pas par un pare-feu type ufw
+      # pour ses ports publies -- chaine FORWARD/DNAT) : preferer l'IP d'une
+      # interface d'administration dediee. Cf. portainer.env.example.
+      - "${PORTAINER_BIND_ADDR}:9000:9000"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - portainer_data:/data
+    networks:
+      network:
+        # IP fixe dans le sous-reseau dedie ci-dessous -- adressage stable
+        # pour d'eventuelles regles pare-feu/monitoring, pas de dependance a
+        # la DNS interne Docker.
+        ipv4_address: "${PORTAINER_NETWORK_IP}"
+
+networks:
+  # Reseau bridge DEDIE (pas le bridge par defaut de compose) : nom
+  # d'interface previsible (visible dans `ip link`/tcpdump), sous-reseau
+  # propre a la stack -- jamais route vers l'exterieur de l'hote.
+  network:
+    name: "net_portainer"
+    driver: bridge
+    driver_opts:
+      com.docker.network.bridge.name: "net_portainer"
+    ipam:
+      driver: default
+      config:
+        - subnet: "${PORTAINER_NETWORK_SUBNET}"
+
+secrets:
+  # Hash bcrypt du mot de passe admin Portainer -- genere avec bcrypt,
+  # jamais en clair. Depose par le consommateur a cote de ce compose.yaml.
+  portainer_admin_password:
+    file: ./secrets/portainer_admin_password
+
+volumes:
+  # Volume nomme, mais backe par un bind explicite -- pas un volume "libre"
+  # sous /var/lib/docker (reserve au moteur : images/layers). Les donnees de
+  # la stack doivent rester sur une partition dediee aux donnees de stacks,
+  # a cote du compose.yaml qui les decrit. ATTENTION : contrairement a un
+  # bind-mount court, `o: bind` ne cree PAS le dossier hote tout seul -- le
+  # chemin PORTAINER_DATA_DIR doit deja exister avant le `docker compose up`.
+  portainer_data:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: "${PORTAINER_DATA_DIR}"
