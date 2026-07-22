@@ -9,7 +9,7 @@ apportées par le projet consommateur (ex. `rpi-nomade`).
 
 ## Stacks disponibles
 
-### `compose/portainer` — Portainer Business Edition (EE lts)
+### `portainer/` — Portainer Business Edition (EE lts)
 
 Interface web de gestion Docker. Licence gratuite jusqu'à 3 nœuds ; la version
 EE est utilisée car elle partage le même codebase que CE et déverrouille les
@@ -26,7 +26,7 @@ Particularités du template :
 - Volume bindé sur une partition dédiée (`PORTAINER_DATA_DIR`) — les données
   restent hors de `/var/lib/docker`, réservé au moteur.
 
-Variables requises (voir `compose/portainer/portainer.env.example`) :
+Variables requises (voir `portainer/portainer.env.example`) :
 
 | Variable | Rôle |
 |---|---|
@@ -38,7 +38,7 @@ Variables requises (voir `compose/portainer/portainer.env.example`) :
 | `PORTAINER_NETWORK_IFACE` | Nom d'interface bridge (`net_portainer`, à garder identique par convention) |
 | `PORTAINER_DATA_DIR` | Chemin hôte pour la persistance des données |
 
-Secrets requis (voir `compose/portainer/secrets.example/`) :
+Secrets requis (voir `portainer/secrets.example/`) :
 
 | Fichier | Contenu |
 |---|---|
@@ -47,27 +47,39 @@ Secrets requis (voir `compose/portainer/secrets.example/`) :
 
 ---
 
-## Deux méthodes de déploiement
+### `ddclient/` — DNS dynamique (linuxserver.io)
 
-### 1. `compose/` — déploiement direct (`docker compose up -d`)
+Met à jour un enregistrement DNS (ex. OVH DynHost) avec l'IP publique de
+l'hôte. Image multi-arch, `ddclient` ≥ 3.10.0 (`protocol=ovh` natif).
 
-Pour les services qui doivent être bootstrappés **sans Portainer** — typiquement
-parce que Portainer n'est pas encore en place. C'est le cas de Portainer
-lui-même : il ne peut pas se déployer via sa propre API.
+Particularité du template : le fichier de config applicatif complet
+(`ddclient.conf`, protocole/identifiants/domaine) n'est pas découpable en
+`${VAR}` Compose — voir `ddclient.conf.example` et la section « Cas
+particulier » du `CLAUDE.md`.
 
-Le consommateur dépose le `compose.yaml` sur la cible avec son `.env` réel et
-ses `secrets/` propres, puis lance `docker compose up -d`.
+Variables requises (voir `ddclient/ddclient.env.example`) :
 
-```
-compose/
-└── portainer/      ← aujourd'hui
-```
+| Variable | Rôle |
+|---|---|
+| `DDCLIENT_CONTAINER_NAME` | Nom du conteneur (`ddclient`, un seul conteneur dans la stack) |
+| `DDCLIENT_PUID` / `DDCLIENT_PGID` / `DDCLIENT_TZ` | Utilisateur hôte et fuseau horaire (image linuxserver.io) |
+| `DDCLIENT_CONFIG_PATH` | Chemin hôte vers le `ddclient.conf` réel |
+| `DDCLIENT_NETWORK_SUBNET` | Sous-réseau Docker interne de la stack, en `/24` |
+| `DDCLIENT_NETWORK_IP` | IP fixe de ddclient dans ce sous-réseau (`.100`) |
+| `DDCLIENT_NETWORK_NAME` | Nom de réseau Docker (`net_ddclient`) |
+| `DDCLIENT_NETWORK_IFACE` | Nom d'interface bridge (`net_ddclient`, à garder identique par convention) |
 
-### 2. Via l'API Portainer — *à venir*
+---
 
-Une fois Portainer en place, les stacks suivantes seront poussées via son API
-(ex. rôle Ansible `portainer-stack`). Elles vivront dans une catégorie
-distincte, créée quand le premier besoin réel se présente.
+## Déploiement
+
+Ce repo ne contient que des templates `compose.yaml`, indépendants du
+mécanisme utilisé pour les lancer — c'est au consommateur de choisir,
+service par service : `docker compose up -d` brut, ou poussé via l'API
+Portainer (rôle Ansible `portainer-stack`). Portainer lui-même est un cas
+particulier fonctionnel : il ne peut pas se déployer via sa propre API
+(il n'existe pas encore au moment de son propre déploiement), donc toujours
+lancé en `docker compose up -d` brut côté consommateur.
 
 ---
 

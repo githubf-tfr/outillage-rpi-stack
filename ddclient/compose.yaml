@@ -1,0 +1,46 @@
+# stacks/ddclient/compose.yaml -- template generique de stack ddclient
+# (DNS dynamique). Aucune valeur ici : tout passe par ${VAR}, resolues par
+# le consommateur (fichier .env depose a cote via docker_compose_stack_env_file,
+# ou Environment variables de la Stack Portainer -- cf. CLAUDE.md de ce repo).
+#
+# Image multi-arch (amd64/arm64v8/armhf) -- linuxserver.io. ddclient >= 3.10.0
+# a l'interieur (protocol=ovh natif, pas besoin de dyndns2+server=www.ovh.com).
+
+services:
+  ddclient:
+    image: lscr.io/linuxserver/ddclient:latest
+    # Nom de conteneur = variable, formalisme nomdelastack_xxx (juste
+    # "nomdelastack" si un seul conteneur dans la stack -- cas ici).
+    container_name: "${DDCLIENT_CONTAINER_NAME}"
+    restart: always
+    environment:
+      - PUID=${DDCLIENT_PUID}
+      - PGID=${DDCLIENT_PGID}
+      - TZ=${DDCLIENT_TZ}
+    volumes:
+      # Fichier de config complet (protocole, identifiants, domaine) --
+      # fourni tel quel par le consommateur, jamais de valeur ici. Montage
+      # d'un seul fichier (pas du dossier /config entier) : le cache runtime
+      # de ddclient (evite les mises a jour inutiles si l'IP n'a pas change)
+      # reste ephemere au conteneur, sans consequence sur la correction.
+      - ${DDCLIENT_CONFIG_PATH}:/config/ddclient.conf:ro
+    networks:
+      network:
+        # Convention d'adressage rpi-stack : .100 = serveur/web, .10 = bdd
+        # (ici, un seul conteneur, .100).
+        ipv4_address: "${DDCLIENT_NETWORK_IP}"
+
+networks:
+  # Reseau bridge DEDIE, sous-reseau propre a la stack, TOUJOURS en /24.
+  network:
+    name: "${DDCLIENT_NETWORK_NAME}"
+    driver: bridge
+    driver_opts:
+      # Nom de reseau Docker et nom d'interface bridge : deux variables
+      # distinctes (formalisme "net_xxx" pour les deux) -- a garder
+      # identiques par convention, decouplable si besoin explicite.
+      com.docker.network.bridge.name: "${DDCLIENT_NETWORK_IFACE}"
+    ipam:
+      driver: default
+      config:
+        - subnet: "${DDCLIENT_NETWORK_SUBNET}"

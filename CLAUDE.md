@@ -19,45 +19,63 @@ outils (ex. `rpi-stage`, rôle `docker-compose-stack` ou `portainer-stack`).
 
 ## Structure
 
-1 dossier de catégorie = 1 mécanisme de déploiement ; à l'intérieur,
-**1 dossier = 1 service** (`compose.yaml` + `<service>.env.example` +
-`secrets.example/` si le service a des secrets).
+**1 dossier = 1 service**, à plat à la racine du repo (`compose.yaml` +
+`<service>.env.example`/`<fichier>.example` + `secrets.example/` si le
+service a des secrets découpables). Pas de dossier de catégorie par
+mécanisme de déploiement : ce repo ne contient que des templates
+`compose.yaml`, indépendants de la façon dont ils seront lancés (`docker
+compose up -d` brut, ou poussés via l'API Portainer une fois celui-ci en
+place) — c'est au **consommateur** (`rpi-stage`, rôle `docker-compose-stack`
+ou `portainer-stack`) de choisir le mécanisme pour un service donné, pas à
+la structure de ce repo de l'imposer.
 
-- **`compose/`** — services déployés par un simple `docker compose up -d`
-  brut (pas via l'API Portainer). Aujourd'hui : `compose/portainer/`.
-  Portainer y vit spécifiquement parce que c'est un cas particulier :
-  **il ne peut pas se déployer lui-même via sa propre API** (il n'existe pas
-  encore au moment de son propre déploiement) — c'est le stack *bootstrap*.
-  Toute future stack qui, elle, sera poussée via l'API Portainer (une fois
-  Portainer en place) n'a **pas sa place ici** — elle vivra dans une autre
-  catégorie, à créer *quand le premier besoin réel se présente* (pas avant
-  — le squelette accueille, le contenu vient à l'usage, même logique que
-  `rpi-nomade`/`CLAUDE.md`).
+Portainer reste malgré tout un cas particulier *fonctionnel* (documenté dans
+son propre `compose.yaml`, pas dans l'arborescence) : il ne peut pas se
+déployer via sa propre API puisqu'il n'existe pas encore au moment de son
+propre déploiement — c'est donc toujours lui qui sera lancé en `docker
+compose up -d` brut côté consommateur, quel que soit l'endroit où il vit
+dans ce repo.
 
 ```
 rpi-stack/
 ├── CLAUDE.md
-└── compose/
-    └── portainer/
-        ├── compose.yaml            # template, ${VAR} uniquement
-        ├── portainer.env.example   # modele des valeurs non secretes
-        └── secrets.example/        # modele des secrets (noms de fichiers, valeurs factices)
+├── portainer/
+│   ├── compose.yaml            # template, ${VAR} uniquement
+│   ├── portainer.env.example   # modele des valeurs non secretes
+│   └── secrets.example/        # modele des secrets (noms de fichiers, valeurs factices)
+└── ddclient/
+    ├── compose.yaml            # template, ${VAR} uniquement
+    ├── ddclient.env.example    # modele des valeurs non secretes
+    └── ddclient.conf.example   # modele du fichier de config complet (voir note ci-dessous)
 ```
 
 ## Convention de nommage des variables
 
 Chaque variable est préfixée par le nom du service en MAJUSCULES
-(`PORTAINER_BIND_ADDR`, `PORTAINER_NETWORK_SUBNET`, ...) — évite les
-collisions si le contenu de plusieurs `.env` de services est un jour
-concaténé côté consommateur.
+(`PORTAINER_BIND_ADDR`, `DDCLIENT_CONFIG_PATH`, ...) — évite les collisions
+si le contenu de plusieurs `.env` de services est un jour concaténé côté
+consommateur.
+
+## Cas particulier : config applicative non découpable en ${VAR}
+
+Certains services (ex. `ddclient`) attendent un **fichier de config
+applicatif complet** (pas juste des valeurs Compose comme ports/volumes) --
+Compose ne sait templater que son propre `compose.yaml`, jamais le contenu
+d'un fichier monté à l'intérieur du conteneur. Dans ce cas : le fichier
+entier reste un `*.example` ici (structure + valeurs factices, ex.
+`ddclient.conf.example`), le `compose.yaml` le monte via un chemin `${VAR}`
+(ex. `${DDCLIENT_CONFIG_PATH}`), et **le consommateur fournit le fichier
+réel** à cet emplacement — pas de découpage plus fin possible sans ajouter
+un mécanisme de templating (entrypoint, `envsubst`...), volontairement évité
+ici (zéro code, cf. règle d'or ci-dessus).
 
 ## Conventions des `compose.yaml`
 
 Ces règles s'appliquent à tout nouveau template (elles ont été rétrofittées
-sur `compose/portainer/` pour rester cohérentes dès le début). Un exemple de
+sur `portainer/` pour rester cohérentes dès le début). Un exemple de
 référence à 2 conteneurs (serveur + bdd) illustrant l'ensemble de ces règles
-vit à la racine du repo : `compose.example.yaml` / `exemple.env.example` /
-`secrets.example/`.
+vit dans `exemple/` (`compose.yaml` / `exemple.env.example` /
+`secrets.example/`).
 
 - **Réseau en `/24`** — chaque stack a son propre sous-réseau Docker dédié,
   toujours en `/24` (à documenter en commentaire à côté de la variable de
@@ -99,10 +117,14 @@ Le consommateur :
 - fournit ses **propres** secrets dans `secrets/` (jamais `secrets.example/`
   d'ici), toujours gitignorés côté consommateur.
 
-Premier consommateur connu : `rpi-nomade` (`services/portainer/`), Phase 2 —
-Portainer déployé en bootstrap via `rpi-stage`
-(`docker-compose-stack` + `docker_compose_stack_env_file`, ajouté le
-2026-07-22 pour ce besoin).
+Consommateurs connus : `rpi-nomade`
+- `services/portainer/` (Phase 2) — Portainer déployé en bootstrap via
+  `rpi-stage` (`docker-compose-stack` + `docker_compose_stack_env_file`,
+  ajouté le 2026-07-22 pour ce besoin).
+- `services/ddclient/` (Phase 2 également, 2ème play de `stage/playbook.yml`
+  — pas de phase séparée, décision du 2026-07-22, cf. `KANBAN.md` de
+  `rpi-nomade`) — poussé via l'API Portainer (`portainer-stack`, avec
+  `portainer-api-token`/`portainer-endpoint` pour les accès).
 
 ## Dépôt GitHub
 

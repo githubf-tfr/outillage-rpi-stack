@@ -1,0 +1,28 @@
+# Modele de ddclient.conf -- copier, remplir avec les vraies valeurs (jamais
+# ici, repo generique). Fichier monte tel quel par compose.yaml en lecture
+# seule dans le conteneur (/config/ddclient.conf) -- pas de decoupage
+# ${VAR}/secret possible a l'interieur de ce fichier, Compose ne template
+# que son propre compose.yaml, pas le contenu d'un fichier monte.
+#
+# Ici : exemple pour OVH DynHost. Adapter le bloc protocol/login/password
+# pour un autre fournisseur (cf. echantillon officiel ddclient.conf.in du
+# projet ddclient pour d'autres protocoles).
+
+daemon=300                      # verifie toutes les 5 min -- ajuster selon la frequence de deplacement
+syslog=yes
+
+# Detection de l'IP publique par service web externe (recommande : marche
+# quel que soit le NAT/reseau amont, pas de config reseau supplementaire).
+# ipify-ipv4 (https://api.ipify.org/) est deja la valeur par defaut de
+# ddclient pour webv4 -- explicite ici pour ne pas dependre d'un defaut non
+# documente dans ce fichier.
+usev4=web, webv4=ipify-ipv4
+
+# OVH DynHost : protocol=ovh natif (ddclient >= 3.10.0, 2022), pas l'ancien
+# schema protocol=dyndns2 + server=www.ovh.com trouve dans certains tutos.
+# login/password : identifiants DynHost dedies (crees dans le manager OVH,
+# Domaines > zone DNS > DynHost) -- PAS le compte OVH principal.
+protocol=ovh
+login=exemple.com-dynhostuser
+password='mot-de-passe-dynhost'
+exemple.example.com             # FQDN a mettre a jour
