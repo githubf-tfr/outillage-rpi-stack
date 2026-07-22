@@ -51,6 +51,36 @@ Chaque variable est préfixée par le nom du service en MAJUSCULES
 collisions si le contenu de plusieurs `.env` de services est un jour
 concaténé côté consommateur.
 
+## Conventions des `compose.yaml`
+
+Ces règles s'appliquent à tout nouveau template (elles ont été rétrofittées
+sur `compose/portainer/` pour rester cohérentes dès le début). Un exemple de
+référence à 2 conteneurs (serveur + bdd) illustrant l'ensemble de ces règles
+vit à la racine du repo : `compose.example.yaml` / `exemple.env.example` /
+`secrets.example/`.
+
+- **Réseau en `/24`** — chaque stack a son propre sous-réseau Docker dédié,
+  toujours en `/24` (à documenter en commentaire à côté de la variable de
+  subnet, ex. `PORTAINER_NETWORK_SUBNET`).
+- **IP fixe par conteneur, en variable** — chaque conteneur a une IP fixe
+  dans ce `/24`, jamais de dépendance à la DNS interne Docker. Convention
+  d'adressage : `.100` = serveur/web, `.10` = bdd (à rappeler en commentaire
+  à côté de chaque `ipv4_address`).
+- **Nom de réseau et nom d'interface = deux variables distinctes** —
+  formalisme `net_xxx` pour les deux (`name:` du réseau Docker et
+  `driver_opts.com.docker.network.bridge.name`). À garder identiques par
+  convention (documenté en commentaire), mais ce sont deux variables
+  séparées : libre au consommateur de les découpler s'il a un jour besoin
+  de forcer une valeur différente.
+- **Nom des volumes** — formalisme `nomdelastack_xxx` (ex. `portainer_data`),
+  documenté en commentaire ; les noms de volumes restent en dur dans le
+  compose (comme le veut la syntaxe Compose), pas en `${VAR}`.
+- **Nom de conteneur, en variable** — `container_name` est toujours une
+  `${VAR}` (ex. `PORTAINER_CONTAINER_NAME`), formalisme `nomdelastack_xxx`.
+  Exception de nommage (pas de découplage variable/valeur) : si la stack n'a
+  qu'un seul conteneur, pas de suffixe — juste `nomdelastack` (ex.
+  Portainer : `PORTAINER_CONTAINER_NAME=portainer`).
+
 ## Comment un projet consomme ce repo
 
 Même mécanisme que `rpi-format`/`rpi-cis`/`rpi-stage` : détection d'un repo

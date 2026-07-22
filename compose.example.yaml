@@ -1,0 +1,74 @@
+# compose.example.yaml — gabarit A LA RACINE, pour discussion des nouvelles
+# conventions rpi-stack (pas encore range dans compose/<service>/, cf.
+# CLAUDE.md). Illustre une stack a 2 conteneurs (serveur web + bdd) pour
+# montrer le formalisme sur un cas non trivial (plusieurs conteneurs, donc
+# plusieurs IP fixes/noms a distinguer).
+
+services:
+  web:
+    image: "${EXEMPLE_WEB_IMAGE}"
+    # Nom de conteneur = variable, formalisme nomdelastack_xxx (juste
+    # "nomdelastack" si un seul conteneur dans la stack). Portainer fait
+    # exception (nom en dur "portainer") : conteneur unique + stack
+    # bootstrap qui ne peut pas etre generique sur ce point.
+    container_name: "${EXEMPLE_WEB_CONTAINER_NAME}"
+    restart: always
+    volumes:
+      - exemple_web_data:/data
+    networks:
+      network:
+        # Convention d'adressage fixe dans le /24 de la stack :
+        # .100 = serveur/web ; .10 = bdd.
+        ipv4_address: "${EXEMPLE_WEB_IP}"
+
+  db:
+    image: "${EXEMPLE_DB_IMAGE}"
+    container_name: "${EXEMPLE_DB_CONTAINER_NAME}"
+    restart: always
+    secrets:
+      - exemple_db_password
+    environment:
+      # Motif courant des images de bdd (postgres, mysql...) : credential lu
+      # depuis un fichier secret plutot qu'en clair dans l'env.
+      DB_PASSWORD_FILE: /run/secrets/exemple_db_password
+    volumes:
+      - exemple_db_data:/var/lib/db
+    networks:
+      network:
+        ipv4_address: "${EXEMPLE_DB_IP}"
+
+networks:
+  # Nom de reseau Docker et nom d'interface bridge : deux variables
+  # distinctes (formalisme "net_xxx" pour les deux) -- a garder identiques
+  # par convention (sinon l'interface visible dans `ip link`/tcpdump ne
+  # correspond plus au nom du reseau Docker), mais libre au consommateur de
+  # les decoupler s'il a un jour besoin de forcer autre chose.
+  network:
+    name: "${EXEMPLE_NETWORK_NAME}"
+    driver: bridge
+    driver_opts:
+      com.docker.network.bridge.name: "${EXEMPLE_NETWORK_IFACE}"
+    ipam:
+      driver: default
+      config:
+        # Sous-reseau dedie a la stack, TOUJOURS en /24.
+        - subnet: "${EXEMPLE_NETWORK_SUBNET}"
+
+secrets:
+  exemple_db_password:
+    file: ./secrets/db_password
+
+volumes:
+  # Nom de volume, formalisme nomdelastack_xxx.
+  exemple_web_data:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: "${EXEMPLE_WEB_DATA_DIR}"
+  exemple_db_data:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: "${EXEMPLE_DB_DATA_DIR}"

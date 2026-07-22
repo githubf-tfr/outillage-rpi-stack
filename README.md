@@ -30,9 +30,12 @@ Variables requises (voir `compose/portainer/portainer.env.example`) :
 
 | Variable | Rôle |
 |---|---|
+| `PORTAINER_CONTAINER_NAME` | Nom du conteneur (`portainer`, un seul conteneur dans la stack) |
 | `PORTAINER_BIND_ADDR` | IP d'écoute de l'UI (port 9000) |
-| `PORTAINER_NETWORK_SUBNET` | Sous-réseau Docker interne de la stack |
-| `PORTAINER_NETWORK_IP` | IP fixe de Portainer dans ce sous-réseau |
+| `PORTAINER_NETWORK_SUBNET` | Sous-réseau Docker interne de la stack, en `/24` |
+| `PORTAINER_NETWORK_IP` | IP fixe de Portainer dans ce sous-réseau (`.100`) |
+| `PORTAINER_NETWORK_NAME` | Nom de réseau Docker (`net_portainer`) |
+| `PORTAINER_NETWORK_IFACE` | Nom d'interface bridge (`net_portainer`, à garder identique par convention) |
 | `PORTAINER_DATA_DIR` | Chemin hôte pour la persistance des données |
 
 Secrets requis (voir `compose/portainer/secrets.example/`) :

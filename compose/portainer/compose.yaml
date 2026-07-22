@@ -9,7 +9,10 @@ services:
     # notion de licence ; passer à EE deverrouille les fonctionnalites sous
     # licence sans rien changer au reste (meme codebase/CLI que CE).
     image: portainer/portainer-ee:lts
-    container_name: portainer
+    # Nom de conteneur = variable, formalisme nomdelastack_xxx (juste
+    # "nomdelastack" si un seul conteneur dans la stack -- cas ici : une
+    # stack, un conteneur).
+    container_name: "${PORTAINER_CONTAINER_NAME}"
     restart: always
     # Mot de passe admin pre-configure au demarrage -- pas de fenetre de 5 min
     # ni de setup_token a recopier depuis les logs a chaque (re)install.
@@ -43,10 +46,13 @@ networks:
   # d'interface previsible (visible dans `ip link`/tcpdump), sous-reseau
   # propre a la stack -- jamais route vers l'exterieur de l'hote.
   network:
-    name: "net_portainer"
+    # Nom de reseau Docker et nom d'interface bridge : deux variables
+    # distinctes (formalisme "net_xxx" pour les deux) -- a garder identiques
+    # par convention, mais libre au consommateur de les decoupler si besoin.
+    name: "${PORTAINER_NETWORK_NAME}"
     driver: bridge
     driver_opts:
-      com.docker.network.bridge.name: "net_portainer"
+      com.docker.network.bridge.name: "${PORTAINER_NETWORK_IFACE}"
     ipam:
       driver: default
       config:
