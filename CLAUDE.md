@@ -189,11 +189,17 @@ privé, en le déclarant `external: true` chez elles (même nom de réseau).
 
 `net_proxy` n'existe qu'une fois la stack `traefik` déployée — toute stack
 qui veut le rejoindre doit donc être déployée (ou redéployée) **après**.
-Ordre concret pour ce repo aujourd'hui : **Portainer** (bootstrap, toujours
-en premier) → **Traefik** (crée `net_proxy`) → **réappliquer le
-`compose.yaml` de Portainer** (`docker compose up -d`, toujours en brut,
-cf. plus haut) pour qu'il rejoigne `net_proxy` à son tour. Pas de
+Ordre concret pour ce repo : **Portainer** (bootstrap, toujours en premier)
+→ **Traefik** (crée `net_proxy`), déployé juste après, en 2ème. Pas de
 contournement possible : Compose refuse un réseau `external` introuvable.
+
+**Seul Portainer a besoin du coup en deux temps** (déployer, puis
+réappliquer son `compose.yaml` après coup) — parce qu'il est *forcément*
+déployé avant que `net_proxy` existe (bootstrap = tout premier). **Toute
+stack déployée après Traefik** (donc la quasi-totalité — `ddclient` compris
+si un jour il en avait besoin) peut inclure `network: proxy: {}` et ses
+labels `traefik.*` **dès son tout premier déploiement**, sans dance en deux
+temps : `net_proxy` existe déjà à ce moment-là.
 
 ## Comment un projet consomme ce repo
 

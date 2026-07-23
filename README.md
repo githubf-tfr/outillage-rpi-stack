@@ -52,9 +52,10 @@ n'a besoin de rien de tout ça — juste une IP:port dans la config `dynamic/`.
   Docker depuis le 2026-07-23).
 - **Adressage** : `10.0.X.Y`, où `X` = code de catégorie (`1` infra, `2` sc,
   `3` métier — mêmes chiffres que les blocs `/16` privés) et `Y` = le 3ème
-  octet du `/24` privé du service (sa position dans sa catégorie). Ex.
-  `ddclient` (`10.1.1.0/24` → 3ème octet `1`), s'il rejoignait un jour
-  `net_proxy`, aurait `10.0.1.1`.
+  octet du `/24` privé du service (sa position dans sa catégorie). Ex. si un
+  service infra en 3ème position (`10.1.2.0/24`) rejoignait `net_proxy`, il
+  aurait `10.0.1.2`. `ddclient` n'y figure pas : pas d'interface web (config
+  uniquement par `ddclient.conf`, cf. sa fiche plus bas), rien à router.
 - **Point ouvert, pas encore tranché** : si une stack a besoin de plusieurs
   URLs Traefik distinctes (donc potentiellement plusieurs adresses sur ce
   réseau pour un seul service), le schéma à utiliser n'est pas décidé —
@@ -70,10 +71,14 @@ n'a besoin de rien de tout ça — juste une IP:port dans la config `dynamic/`.
 
 `net_proxy` n'existe qu'une fois `traefik` déployé. Ordre concret :
 **Portainer** (bootstrap, toujours en premier) → **Traefik** (crée
-`net_proxy`) → **réappliquer le `compose.yaml` de Portainer**
-(`docker compose up -d`, toujours en brut) pour qu'il rejoigne `net_proxy` à
-son tour. Compose refuse un réseau `external` introuvable — pas de
-contournement possible sur l'ordre.
+`net_proxy`), déployé juste après, en 2ème. Compose refuse un réseau
+`external` introuvable — pas de contournement possible sur l'ordre.
+
+**Seul Portainer a besoin du coup en deux temps** (déployer, puis
+réappliquer son `compose.yaml`) — il est forcément déployé avant que
+`net_proxy` existe. **Toute stack déployée après Traefik** peut inclure le
+réseau `proxy` et ses labels `traefik.*` dès son tout premier déploiement,
+sans dance en deux temps.
 
 #### Rattacher une stack pré-existante à `net_proxy`
 
