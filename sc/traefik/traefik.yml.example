@@ -59,10 +59,10 @@ certificatesResolvers:
       # identifiants API OVH (application key/secret + consumer key,
       # generes sur https://api.ovh.com/createToken/) -- DIFFERENTS des
       # identifiants DynHost utilises par ddclient (ceux-la ne donnent pas
-      # acces a l'API generaliste). A activer en retirant httpChallenge
-      # ci-dessus et decommentant ce qui suit, puis en passant
-      # OVH_ENDPOINT/OVH_APPLICATION_KEY/OVH_APPLICATION_SECRET/
-      # OVH_CONSUMER_KEY en variables d'environnement du conteneur
-      # (a ajouter dans compose.yaml si retenu -- pas fait ici par defaut).
+      # acces a l'API generaliste). Identifiants deja fournis en variables
+      # d'environnement du conteneur via secrets/ovh_dns.env (cf.
+      # compose.yaml, meme mecanisme que secrets/license.env de Portainer) --
+      # a activer en retirant httpChallenge ci-dessus et decommentant ce qui
+      # suit.
       # dnsChallenge:
       #   provider: ovh

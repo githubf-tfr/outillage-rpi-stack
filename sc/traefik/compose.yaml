@@ -10,6 +10,12 @@ services:
     image: traefik:v3.1
     container_name: "${TRAEFIK_CONTAINER_NAME}"
     restart: always
+    # DNS-01 (challenge ACME sans exposer le port 80) : identifiants API OVH
+    # fournis par le consommateur (meme mecanisme que secrets/license.env de
+    # Portainer) -- sans effet si dnsChallenge n'est pas active dans
+    # traefik.yml (cf. traefik.yml.example).
+    env_file:
+      - ./secrets/ovh_dns.env
     command:
       - "--configFile=/etc/traefik/traefik.yml"
     # Sous-commande CLI native (pas un ping ICMP) : fait un vrai GET HTTP sur
