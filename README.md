@@ -51,11 +51,49 @@ tout ça — juste une IP:port dans la config `dynamic/`.
 |---|---|---|
 | `net_proxy` | `traefik` | toute stack locale qui veut être routée via Traefik (`external: true`) |
 
+#### Rattacher une stack pré-existante à `net_proxy`
+
+Pour exposer via Traefik une stack déjà déployée (locale), le contenu à
+ajouter est **le même** quel que soit le mécanisme de déploiement — seule la
+façon de le pousser change :
+
+```yaml
+services:
+  monservice:
+    networks:
+      network: {}   # son /24 privé existant, inchangé
+      proxy: {}     # ajout : rejoint le réseau partagé
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.monservice.rule=Host(`monservice.exemple.com`)"
+      - "traefik.http.routers.monservice.entrypoints=websecure"
+      - "traefik.http.routers.monservice.tls.certresolver=letsencrypt"
+
+networks:
+  network: {}       # inchangé
+  proxy:
+    external: true
+    name: net_proxy # doit correspondre au nom cree par la stack traefik
+```
+
+- **Déploiement brut (`docker compose up -d`)** — éditer le `compose.yaml`
+  de la stack ciblée sur la cible, puis relancer `docker compose up -d` dans
+  son dossier. Compose connecte le conteneur en plus de son réseau existant,
+  sans toucher aux volumes/données.
+- **Déploiement via l'API Portainer** — même contenu YAML, mais mis à jour
+  dans la Stack Portainer et redéployé via l'API (`PUT /api/stacks/{id}`,
+  ce que fait le rôle `portainer-stack`) ; les variables passent par le
+  champ *Environment variables* de la Stack plutôt que par un `.env` déposé
+  à côté.
+- **Dans les deux cas** : `net_proxy` doit déjà exister sur l'hôte (donc la
+  stack `traefik` déjà déployée) avant l'update — sinon ça échoue en
+  cherchant un réseau externe introuvable.
+
 ---
 
 ## Stacks disponibles
 
-### `portainer/` — Portainer Business Edition (EE lts)
+### `infra/portainer/` — Portainer Business Edition (EE lts)
 
 Interface web de gestion Docker. Licence gratuite jusqu'à 3 nœuds ; la version
 EE est utilisée car elle partage le même codebase que CE et déverrouille les
@@ -72,7 +110,7 @@ Particularités du template :
 - Volume bindé sur une partition dédiée (`PORTAINER_DATA_DIR`) — les données
   restent hors de `/var/lib/docker`, réservé au moteur.
 
-Variables requises (voir `portainer/portainer.env.example`) :
+Variables requises (voir `infra/portainer/portainer.env.example`) :
 
 | Variable | Rôle |
 |---|---|
@@ -84,7 +122,7 @@ Variables requises (voir `portainer/portainer.env.example`) :
 | `PORTAINER_NETWORK_IFACE` | Nom d'interface bridge (`net_portainer`, à garder identique par convention) |
 | `PORTAINER_DATA_DIR` | Chemin hôte pour la persistance des données |
 
-Secrets requis (voir `portainer/secrets.example/`) :
+Secrets requis (voir `infra/portainer/secrets.example/`) :
 
 | Fichier | Contenu |
 |---|---|
@@ -93,7 +131,7 @@ Secrets requis (voir `portainer/secrets.example/`) :
 
 ---
 
-### `ddclient/` — DNS dynamique (linuxserver.io)
+### `infra/ddclient/` — DNS dynamique (linuxserver.io)
 
 Met à jour un enregistrement DNS (ex. OVH DynHost) avec l'IP publique de
 l'hôte. Image multi-arch, `ddclient` ≥ 3.10.0 (`protocol=ovh` natif).
@@ -103,7 +141,7 @@ Particularité du template : le fichier de config applicatif complet
 `${VAR}` Compose — voir `ddclient.conf.example` et la section « Cas
 particulier » du `CLAUDE.md`.
 
-Variables requises (voir `ddclient/ddclient.env.example`) :
+Variables requises (voir `infra/ddclient/ddclient.env.example`) :
 
 | Variable | Rôle |
 |---|---|
@@ -117,7 +155,7 @@ Variables requises (voir `ddclient/ddclient.env.example`) :
 
 ---
 
-### `traefik/` — reverse proxy + TLS (services communs)
+### `sc/traefik/` — reverse proxy + TLS (services communs)
 
 Expose les futurs services métiers derrière TLS (ACME/Let's Encrypt). N'existe
 que pour router d'autres stacks — d'où sa catégorie « services communs »
@@ -143,7 +181,7 @@ Particularités du template :
   80 exposé, certs wildcard, mais identifiants API OVH différents de ceux de
   `ddclient`).
 
-Variables requises (voir `traefik/traefik.env.example`) :
+Variables requises (voir `sc/traefik/traefik.env.example`) :
 
 | Variable | Rôle |
 |---|---|

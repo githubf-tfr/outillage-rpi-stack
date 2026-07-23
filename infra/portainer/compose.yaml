@@ -1,4 +1,4 @@
-# portainer/compose.yaml — template générique de stack Portainer.
+# infra/portainer/compose.yaml — template générique de stack Portainer.
 # Aucune valeur ici : tout passe par ${VAR}, résolues par le consommateur
 # (fichier .env déposé à côté, cf. portainer.env.example) — voir le CLAUDE.md
 # à la racine de ce repo pour le mécanisme complet.

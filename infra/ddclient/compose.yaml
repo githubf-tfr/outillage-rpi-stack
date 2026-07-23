@@ -1,4 +1,4 @@
-# ddclient/compose.yaml -- template generique de stack ddclient
+# infra/ddclient/compose.yaml -- template generique de stack ddclient
 # (DNS dynamique). Aucune valeur ici : tout passe par ${VAR}, resolues par
 # le consommateur (fichier .env depose a cote via docker_compose_stack_env_file,
 # ou Environment variables de la Stack Portainer -- cf. CLAUDE.md de ce repo).

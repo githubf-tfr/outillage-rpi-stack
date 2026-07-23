@@ -1,4 +1,4 @@
-# traefik/compose.yaml -- template generique de stack Traefik
+# sc/traefik/compose.yaml -- template generique de stack Traefik
 # (reverse proxy + TLS, service COMMUN : consomme par les futurs services
 # metiers qui veulent etre exposes). Aucune valeur ici : tout passe par
 # ${VAR}, resolues par le consommateur (fichier .env depose a cote via

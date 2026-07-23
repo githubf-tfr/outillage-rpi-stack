@@ -18,8 +18,8 @@ de rôle Ansible) — ça, c'est le rôle du consommateur et de ses propres
 outils (ex. `rpi-stage`, rôle `docker-compose-stack` ou `portainer-stack`).
 
 **Conventions figées — pas de déviation sans accord explicite.** La
-structure (1 dossier = 1 service), le nommage des variables/conteneurs/
-volumes/réseaux et le plan d'adressage réseau (cf. plus bas et
+structure (catégories + 1 dossier = 1 service), le nommage des
+variables/conteneurs/volumes/réseaux et le plan d'adressage réseau (cf. plus bas et
 `README.md`) sont des décisions actées avec l'utilisateur, pas des choix
 libres. Tout assistant (LLM ou autre) qui modifie ce repo, ou qui s'en
 inspire pour créer un nouveau service, doit **obtenir l'accord explicite
@@ -28,15 +28,21 @@ proposant une alternative "meilleure" de sa propre initiative.
 
 ## Structure
 
-**1 dossier = 1 service**, à plat à la racine du repo (`compose.yaml` +
-`<service>.env.example`/`<fichier>.example` + `secrets.example/` si le
-service a des secrets découpables). Pas de dossier de catégorie par
-mécanisme de déploiement : ce repo ne contient que des templates
-`compose.yaml`, indépendants de la façon dont ils seront lancés (`docker
-compose up -d` brut, ou poussés via l'API Portainer une fois celui-ci en
-place) — c'est au **consommateur** (`rpi-stage`, rôle `docker-compose-stack`
-ou `portainer-stack`) de choisir le mécanisme pour un service donné, pas à
-la structure de ce repo de l'imposer.
+**1 dossier de catégorie → 1 dossier = 1 service** à l'intérieur
+(`compose.yaml` + `<service>.env.example`/`<fichier>.example` +
+`secrets.example/` si le service a des secrets découpables). Décidé le
+2026-07-23, à l'occasion de `traefik/` : 3 catégories, **les mêmes** que les
+blocs `/16` du plan d'adressage réseau (cf. plus bas et `README.md`) —
+`infra/` (infrastructure), `sc/` (services communs), `metier/` (services
+métiers, vide pour l'instant).
+
+**Important : cet axe de catégorisation est différent de celui rejeté plus
+tôt.** Ce repo a explicitement écarté un découpage par *mécanisme de
+déploiement* (`compose/` brut vs `stacks/` API Portainer, cf. historique
+Git) — ce choix-là reste entièrement au consommateur, indépendant de la
+structure. Le découpage `infra/`/`sc/`/`metier/` catégorise par **rôle du
+service**, pas par mécanisme : un service peut vivre dans n'importe laquelle
+des 3 catégories quel que soit son mode de déploiement réel.
 
 Portainer reste malgré tout un cas particulier *fonctionnel* (documenté dans
 son propre `compose.yaml`, pas dans l'arborescence) : il ne peut pas se
@@ -48,19 +54,22 @@ dans ce repo.
 ```
 rpi-stack/
 ├── CLAUDE.md
-├── portainer/
-│   ├── compose.yaml            # template, ${VAR} uniquement
-│   ├── portainer.env.example   # modele des valeurs non secretes
-│   └── secrets.example/        # modele des secrets (noms de fichiers, valeurs factices)
-├── ddclient/
-│   ├── compose.yaml            # template, ${VAR} uniquement
-│   ├── ddclient.env.example    # modele des valeurs non secretes
-│   └── ddclient.conf.example   # modele du fichier de config complet (voir note ci-dessous)
-└── traefik/
-    ├── compose.yaml            # template, ${VAR} uniquement
-    ├── traefik.env.example     # modele des valeurs non secretes
-    ├── traefik.yml.example     # modele de la config statique (voir note ci-dessous)
-    └── dynamic/                # modeles de config dynamique (routes), voir "Reseau proxy partage"
+├── infra/
+│   ├── portainer/
+│   │   ├── compose.yaml            # template, ${VAR} uniquement
+│   │   ├── portainer.env.example   # modele des valeurs non secretes
+│   │   └── secrets.example/        # modele des secrets (noms de fichiers, valeurs factices)
+│   └── ddclient/
+│       ├── compose.yaml            # template, ${VAR} uniquement
+│       ├── ddclient.env.example    # modele des valeurs non secretes
+│       └── ddclient.conf.example   # modele du fichier de config complet (voir note ci-dessous)
+├── sc/
+│   └── traefik/
+│       ├── compose.yaml            # template, ${VAR} uniquement
+│       ├── traefik.env.example     # modele des valeurs non secretes
+│       ├── traefik.yml.example     # modele de la config statique (voir note ci-dessous)
+│       └── dynamic/                # modeles de config dynamique (routes), voir "Reseau proxy partage"
+└── metier/                         # vide pour l'instant -- premier service metier ici
 ```
 
 ## Convention de nommage des variables
@@ -86,10 +95,12 @@ ici (zéro code, cf. règle d'or ci-dessus).
 ## Conventions des `compose.yaml`
 
 Ces règles s'appliquent à tout nouveau template (elles ont été rétrofittées
-sur `portainer/` pour rester cohérentes dès le début). Un exemple de
+sur `infra/portainer/` pour rester cohérentes dès le début). Un exemple de
 référence à 2 conteneurs (serveur + bdd) illustrant l'ensemble de ces règles
 vit dans `exemple/` (`compose.yaml` / `exemple.env.example` /
-`secrets.example/`).
+`secrets.example/`) — **volontairement à la racine, hors catégorie** :
+n'étant pas un service réellement déployé, il n'a pas sa place dans
+`infra/`/`sc/`/`metier/`.
 
 - **Réseau en `/24`** — chaque stack a son propre sous-réseau Docker dédié,
   toujours en `/24` (à documenter en commentaire à côté de la variable de
@@ -130,7 +141,7 @@ les stacks backend **locales** rejoignent **en plus** de leur propre `/24`
 privé, en le déclarant `external: true` chez elles (même nom de réseau).
 
 - La stack qui **crée** le réseau partagé le fait sans `external: true` (cf.
-  `traefik/compose.yaml`, réseau `proxy`) — elle en est le *bootstrap*, même
+  `sc/traefik/compose.yaml`, réseau `proxy`) — elle en est le *bootstrap*, même
   logique que Portainer pour les stacks Docker en général.
 - Nom de ce réseau partagé, en variable dédiée (ex.
   `TRAEFIK_PROXY_NETWORK_NAME=net_proxy`) — distinct du `/24` privé de la
@@ -138,7 +149,7 @@ privé, en le déclarant `external: true` chez elles (même nom de réseau).
   normalement.
 - Un backend **délocalisé** (hors Docker/hors hôte : NAS, autre Pi,
   cluster...) n'a besoin d'aucun réseau partagé — juste d'une IP:port
-  joignable (cf. `traefik/dynamic/exemple-delocalise.yml.example`).
+  joignable (cf. `sc/traefik/dynamic/exemple-delocalise.yml.example`).
 - Cet amendement ne s'applique **qu'aux stacks qui en ont explicitement
   besoin** (routage/proxy) — la règle par défaut (un `/24` dédié, point)
   reste la norme pour tout le reste.
