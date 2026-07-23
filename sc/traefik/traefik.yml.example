@@ -6,6 +6,11 @@
 log:
   level: INFO
 
+# Active /ping sur l'entrypoint integre "traefik" (port 8080, non publie
+# vers l'hote) -- utilise par le HEALTHCHECK Docker (traefik healthcheck
+# --ping, cf. compose.yaml). Section vide = valeurs par defaut suffisantes.
+ping: {}
+
 api:
   dashboard: true
   insecure: false   # jamais expose nu -- route via un router + middleware

@@ -109,6 +109,10 @@ Particularités du template :
   les règles pare-feu, interface prévisible dans `ip link`/tcpdump.
 - Volume bindé sur une partition dédiée (`PORTAINER_DATA_DIR`) — les données
   restent hors de `/var/lib/docker`, réservé au moteur.
+- **Pas de `healthcheck`** — l'image est buildée `FROM scratch` (aucun
+  wget/curl/shell dedans) et Portainer n'a pas de sous-commande CLI dédiée ;
+  un healthcheck HTTP classique est donc impossible sans changer l'image
+  (`-alpine`), pas fait ici. Détail en commentaire dans `compose.yaml`.
 
 Variables requises (voir `infra/portainer/portainer.env.example`) :
 
@@ -136,10 +140,15 @@ Secrets requis (voir `infra/portainer/secrets.example/`) :
 Met à jour un enregistrement DNS (ex. OVH DynHost) avec l'IP publique de
 l'hôte. Image multi-arch, `ddclient` ≥ 3.10.0 (`protocol=ovh` natif).
 
-Particularité du template : le fichier de config applicatif complet
-(`ddclient.conf`, protocole/identifiants/domaine) n'est pas découpable en
-`${VAR}` Compose — voir `ddclient.conf.example` et la section « Cas
-particulier » du `CLAUDE.md`.
+Particularités du template :
+
+- Le fichier de config applicatif complet (`ddclient.conf`,
+  protocole/identifiants/domaine) n'est pas découpable en `${VAR}` Compose
+  — voir `ddclient.conf.example` et la section « Cas particulier » du
+  `CLAUDE.md`.
+- **Pas de `healthcheck`** — ddclient n'écoute aucun port, ne sert aucune
+  page web, rien à sonder depuis l'extérieur du process. Détail en
+  commentaire dans `compose.yaml`.
 
 Variables requises (voir `infra/ddclient/ddclient.env.example`) :
 
@@ -180,6 +189,11 @@ Particularités du template :
   via OVH documentée en commentaire dans `traefik.yml.example` (pas de port
   80 exposé, certs wildcard, mais identifiants API OVH différents de ceux de
   `ddclient`).
+- **`healthcheck` via `traefik healthcheck --ping`** — sous-commande CLI
+  native (pas un ping ICMP) : GET HTTP réel sur `/ping`, servi par
+  l'entrypoint interne `traefik` (port 8080, non publié vers l'hôte).
+  Marche sans wget/curl dans l'image ; nécessite `ping: {}` en config
+  statique (déjà dans `traefik.yml.example`).
 
 Variables requises (voir `sc/traefik/traefik.env.example`) :
 

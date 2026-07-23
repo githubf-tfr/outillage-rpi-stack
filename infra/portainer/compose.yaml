@@ -24,6 +24,14 @@ services:
     # officielle) -- passee via env_file plutot qu'en dur ici.
     env_file:
       - ./secrets/license.env
+    # Pas de healthcheck : l'image est buildee FROM scratch (verifie dans le
+    # Dockerfile officiel) -- aucun wget/curl/shell dedans, un
+    # healthcheck.test s'execute pourtant TOUJOURS a l'interieur du
+    # conteneur cible, donc rien n'est disponible pour sonder /api/status.
+    # Portainer n'a pas non plus de sous-commande CLI dediee (demande par la
+    # communaute, jamais implementee, cf. discussions GitHub portainer/portainer).
+    # Alternative existante mais ecartee : tag "-alpine" (inclut un shell +
+    # wget) -- changerait l'image pinnee, pas fait ici sans decision explicite.
     ports:
       # PORTAINER_BIND_ADDR : IP sur laquelle exposer l'UI (9000). Eviter
       # 0.0.0.0 si Portainer ne doit pas etre joignable depuis toutes les

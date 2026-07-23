@@ -128,6 +128,17 @@ n'étant pas un service réellement déployé, il n'a pas sa place dans
   Exception de nommage (pas de découplage variable/valeur) : si la stack n'a
   qu'un seul conteneur, pas de suffixe — juste `nomdelastack` (ex.
   Portainer : `PORTAINER_CONTAINER_NAME=portainer`).
+- **`healthcheck`, quand c'est réellement possible** — décidé le 2026-07-23,
+  à l'occasion de `traefik/` : ajouter un `healthcheck:` quand le conteneur
+  offre un moyen fiable de se sonder *depuis l'intérieur de lui-même*
+  (ex. `traefik healthcheck --ping`, sous-commande CLI native). **Ne pas**
+  en ajouter un artificiel juste pour en avoir un — si l'image ne fournit
+  aucun outil exploitable (ex. Portainer, image `scratch` sans wget/curl/
+  shell) ou si le service n'a rien à sonder (ex. ddclient, ne sert aucun
+  port), documenter l'absence en commentaire directement dans le
+  `compose.yaml`, avec la raison technique précise plutôt qu'une supposition
+  — pas de check maison en shell/log-parsing pour combler le vide (ce serait
+  du code, cf. règle d'or).
 
 ## Réseau `proxy` partagé (amendement à la règle du `/24` par stack)
 

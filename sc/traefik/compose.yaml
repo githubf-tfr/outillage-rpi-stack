@@ -12,6 +12,16 @@ services:
     restart: always
     command:
       - "--configFile=/etc/traefik/traefik.yml"
+    # Sous-commande CLI native (pas un ping ICMP) : fait un vrai GET HTTP sur
+    # /ping, servi par le serveur web interne de Traefik sur l'entrypoint
+    # integre "traefik" (port 8080, non publie vers l'hote -- usage interne
+    # au conteneur uniquement). Marche sans wget/curl dans l'image ; /ping
+    # doit etre active en config statique (cf. traefik.yml.example, "ping").
+    healthcheck:
+      test: ["CMD", "traefik", "healthcheck", "--ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
     ports:
       # PAS 0.0.0.0 : Docker contourne ufw pour ses ports publies (chaine
       # FORWARD/DNAT, pas filtree par la politique par defaut d'ufw) -- le

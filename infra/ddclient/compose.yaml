@@ -17,6 +17,14 @@ services:
       - PUID=${DDCLIENT_PUID}
       - PGID=${DDCLIENT_PGID}
       - TZ=${DDCLIENT_TZ}
+    # Pas de healthcheck : ddclient n'ecoute aucun port, ne sert aucune page
+    # web -- rien a sonder depuis l'exterieur du process. Le mecanisme
+    # healthcheck generique linuxserver.io (docs.linuxserver.io/images/docker-healthchecks)
+    # suppose une app avec un port HTTP configure, ne s'applique pas ici. Un
+    # check maison (ex. parser les logs pour confirmer une mise a jour DNS
+    # reussie) serait fragile et constituerait du CODE dans ce repo --
+    # contraire a la regle d'or (zero code, cf. CLAUDE.md). "running" =
+    # deja tout ce que Docker peut dire de fiable sur ce conteneur.
     volumes:
       # Fichier de config complet (protocole, identifiants, domaine) --
       # fourni tel quel par le consommateur, jamais de valeur ici. Montage
