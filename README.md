@@ -7,6 +7,31 @@ apportées par le projet consommateur (ex. `rpi-nomade`).
 
 ---
 
+## Plan d'adressage réseau (Docker)
+
+Chaque stack a son propre sous-réseau Docker dédié, toujours en `/24` (cf.
+`CLAUDE.md`), alloué depuis un bloc `/16` fixe selon la catégorie du
+service :
+
+| Bloc `/16` | Catégorie |
+|---|---|
+| `10.0.0.0/16` | Services d'infrastructure (Portainer, ddclient, monitoring...) |
+| `10.1.0.0/16` | Services communs (partagés entre plusieurs métiers) |
+| `10.2.0.0/16` | Services métiers |
+
+Allocations actuelles — **à tenir à jour à chaque nouveau service** :
+
+| Stack | Catégorie | Subnet | Réseau/interface |
+|---|---|---|---|
+| `portainer` | infrastructure | `10.0.0.0/24` | `net_portainer` |
+| `ddclient` | infrastructure | `10.0.1.0/24` | `net_ddclient` |
+
+Prochain `/24` libre : `10.0.2.0/24` (infrastructure) ; `10.1.0.0/24`
+(services communs, bloc encore inutilisé) ; `10.2.0.0/24` (services
+métiers, bloc encore inutilisé).
+
+---
+
 ## Stacks disponibles
 
 ### `portainer/` — Portainer Business Edition (EE lts)

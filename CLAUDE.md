@@ -79,7 +79,12 @@ vit dans `exemple/` (`compose.yaml` / `exemple.env.example` /
 
 - **Réseau en `/24`** — chaque stack a son propre sous-réseau Docker dédié,
   toujours en `/24` (à documenter en commentaire à côté de la variable de
-  subnet, ex. `PORTAINER_NETWORK_SUBNET`).
+  subnet, ex. `PORTAINER_NETWORK_SUBNET`), alloué depuis un bloc `/16` fixe
+  selon la catégorie du service : infrastructure `10.0.0.0/16`, services
+  communs `10.1.0.0/16`, services métiers `10.2.0.0/16`. Le registre des
+  allocations `/24` actuelles vit dans `README.md` (« Plan d'adressage
+  réseau ») — à tenir à jour à chaque nouveau service, pour éviter les
+  collisions de sous-réseau.
 - **IP fixe par conteneur, en variable** — chaque conteneur a une IP fixe
   dans ce `/24`, jamais de dépendance à la DNS interne Docker. Convention
   d'adressage : `.100` = serveur/web, `.10` = bdd (à rappeler en commentaire
