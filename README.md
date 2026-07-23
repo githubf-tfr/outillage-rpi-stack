@@ -17,26 +17,26 @@ apportées par le projet consommateur (ex. `rpi-nomade`).
 
 Chaque stack a son propre sous-réseau Docker dédié, toujours en `/24` (cf.
 `CLAUDE.md`), alloué depuis un bloc `/16` fixe selon la catégorie du
-service. Renumérotée le 2026-07-23 pour libérer `10.0.0.0/16` au réseau
-`proxy` partagé (cf. plus bas) :
+service. Renumérotée une 2ème fois le 2026-07-23 (fusion des catégories
+infrastructure/services communs en un seul dossier `socle/`, cf.
+`CLAUDE.md` « Structure ») :
 
 | Bloc `/16` | Catégorie |
 |---|---|
 | `10.0.0.0/16` | Réseau `proxy` partagé (routage, cf. ci-dessous — pas un bloc de `/24` par stack) |
-| `10.1.0.0/16` | Services d'infrastructure (Portainer, ddclient, monitoring...) |
-| `10.2.0.0/16` | Services communs (partagés entre plusieurs métiers) |
-| `10.3.0.0/16` | Services métiers |
+| `10.1.0.0/16` | Socle technique (Portainer, ddclient, Traefik, monitoring...) |
+| `10.2.0.0/16` | Services métiers |
 
 Allocations actuelles — **à tenir à jour à chaque nouveau service** :
 
 | Stack | Catégorie | Subnet privé | Réseau/interface | IP sur `net_proxy` |
 |---|---|---|---|---|
-| `portainer` | infrastructure | `10.1.0.0/24` | `net_portainer` | — (routé via provider file, pas `net_proxy` — cf. ci-dessous) |
-| `ddclient` | infrastructure | `10.1.1.0/24` | `net_ddclient` | — (pas d'interface web, rien à router) |
-| `traefik` | services communs | `10.2.0.0/24` | `net_traefik` | `10.0.2.0` (créateur du réseau) |
+| `portainer` | socle | `10.1.0.0/24` | `net_portainer` | — (routé via provider file, pas `net_proxy` — cf. ci-dessous) |
+| `ddclient` | socle | `10.1.1.0/24` | `net_ddclient` | — (pas d'interface web, rien à router) |
+| `traefik` | socle | `10.1.2.0/24` | `net_traefik` | `10.0.1.2` (créateur du réseau) |
 
-Prochain `/24` libre : `10.1.2.0/24` (infrastructure) ; `10.2.1.0/24`
-(services communs) ; `10.3.0.0/24` (services métiers, bloc encore inutilisé).
+Prochain `/24` libre : `10.1.3.0/24` (socle) ; `10.2.0.0/24` (services
+métiers, bloc encore inutilisé).
 
 ### Réseau `proxy` partagé (routage)
 
@@ -50,14 +50,14 @@ n'a besoin de rien de tout ça — juste une IP:port dans la config `dynamic/`.
 
 - **Sous-réseau fixe** : `10.0.0.0/16` (plus laissé à l'attribution libre de
   Docker depuis le 2026-07-23).
-- **Adressage** : `10.0.X.Y`, où `X` = code de catégorie (`1` infra, `2` sc,
-  `3` métier — mêmes chiffres que les blocs `/16` privés) et `Y` = le 3ème
-  octet du `/24` privé du service (sa position dans sa catégorie). Ex. si un
-  service infra en 3ème position (`10.1.2.0/24`) rejoignait `net_proxy`, il
-  aurait `10.0.1.2`. **Aucune stack ne le rejoint aujourd'hui** — `ddclient`
-  n'a pas d'interface web (rien à router), `portainer` est routé autrement
-  (cf. « Pourquoi Portainer n'est pas sur `net_proxy` » ci-dessous) ; le
-  mécanisme reste prêt pour un futur service qui en aurait vraiment besoin.
+- **Adressage** : `10.0.X.Y`, où `X` = code de catégorie (`1` socle, `2`
+  métier — mêmes chiffres que les blocs `/16` privés) et `Y` = le 3ème
+  octet du `/24` privé du service (sa position dans sa catégorie). Ex.
+  `traefik` (`10.1.2.0/24`, 3ème octet `2`) → `10.0.1.2`. **Aucune autre
+  stack ne le rejoint aujourd'hui** — `ddclient` n'a pas d'interface web
+  (rien à router), `portainer` est routé autrement (cf. « Pourquoi
+  Portainer n'est pas sur `net_proxy` » ci-dessous) ; le mécanisme reste
+  prêt pour un futur service qui en aurait vraiment besoin.
 - **Point ouvert, pas encore tranché** : si une stack a besoin de plusieurs
   URLs Traefik distinctes (donc potentiellement plusieurs adresses sur ce
   réseau pour un seul service), le schéma à utiliser n'est pas décidé —
@@ -80,7 +80,7 @@ via `net_proxy`/labels : il est déployé *avant* que `traefik` (et donc
 Portainer) rien que pour lui.
 
 À la place, Traefik route vers Portainer via le **provider file** — exacte-
-ment comme un backend délocalisé (cf. `sc/traefik/dynamic/portainer.yml.example`) :
+ment comme un backend délocalisé (cf. `socle/traefik/dynamic/portainer.yml.example`) :
 une simple entrée `IP:port` pointant sur l'accès déjà publié de Portainer
 (`PORTAINER_BIND_ADDR:9000`). Zéro changement dans son `compose.yaml`, zéro
 label, zéro réseau partagé, zéro dépendance d'ordre de déploiement —
@@ -142,7 +142,7 @@ networks:
 
 ## Stacks disponibles
 
-### `infra/portainer/` — Portainer Business Edition (EE lts)
+### `socle/portainer/` — Portainer Business Edition (EE lts)
 
 Interface web de gestion Docker. Licence gratuite jusqu'à 3 nœuds ; la version
 EE est utilisée car elle partage le même codebase que CE et déverrouille les
@@ -164,11 +164,11 @@ Particularités du template :
   (`-alpine`), pas fait ici. Détail en commentaire dans `compose.yaml`.
 - **Ne rejoint pas `net_proxy`** — pas de label `traefik.*`, pas de réseau
   partagé. Pour du TLS Let's Encrypt, Traefik route vers lui via le
-  *provider file* (IP:port déjà publiée, cf. `sc/traefik/dynamic/portainer.yml.example`
+  *provider file* (IP:port déjà publiée, cf. `socle/traefik/dynamic/portainer.yml.example`
   et « Pourquoi Portainer n'est pas sur `net_proxy` » plus haut) — l'accès
   direct `PORTAINER_BIND_ADDR:9000` reste utilisable en fallback.
 
-Variables requises (voir `infra/portainer/portainer.env.example`) :
+Variables requises (voir `socle/portainer/portainer.env.example`) :
 
 | Variable | Rôle |
 |---|---|
@@ -180,7 +180,7 @@ Variables requises (voir `infra/portainer/portainer.env.example`) :
 | `PORTAINER_NETWORK_IFACE` | Nom d'interface bridge (`net_portainer`, à garder identique par convention) |
 | `PORTAINER_DATA_DIR` | Chemin hôte pour la persistance des données |
 
-Secrets requis (voir `infra/portainer/secrets.example/`) :
+Secrets requis (voir `socle/portainer/secrets.example/`) :
 
 | Fichier | Contenu |
 |---|---|
@@ -189,7 +189,7 @@ Secrets requis (voir `infra/portainer/secrets.example/`) :
 
 ---
 
-### `infra/ddclient/` — DNS dynamique (linuxserver.io)
+### `socle/ddclient/` — DNS dynamique (linuxserver.io)
 
 Met à jour un enregistrement DNS (ex. OVH DynHost) avec l'IP publique de
 l'hôte. Image multi-arch, `ddclient` ≥ 3.10.0 (`protocol=ovh` natif).
@@ -204,7 +204,7 @@ Particularités du template :
   page web, rien à sonder depuis l'extérieur du process. Détail en
   commentaire dans `compose.yaml`.
 
-Variables requises (voir `infra/ddclient/ddclient.env.example`) :
+Variables requises (voir `socle/ddclient/ddclient.env.example`) :
 
 | Variable | Rôle |
 |---|---|
@@ -218,11 +218,11 @@ Variables requises (voir `infra/ddclient/ddclient.env.example`) :
 
 ---
 
-### `sc/traefik/` — reverse proxy + TLS (services communs)
+### `socle/traefik/` — reverse proxy + TLS (socle technique)
 
-Expose les futurs services métiers derrière TLS (ACME/Let's Encrypt). N'existe
-que pour router d'autres stacks — d'où sa catégorie « services communs »
-plutôt qu'infrastructure.
+Expose les futurs services métiers derrière TLS (ACME/Let's Encrypt). Fait
+partie du socle technique au même titre que Portainer/ddclient — sert
+d'autres stacks plutôt que d'être un service métier lui-même.
 
 Particularités du template :
 
@@ -252,7 +252,7 @@ Particularités du template :
   Marche sans wget/curl dans l'image ; nécessite `ping: {}` en config
   statique (déjà dans `traefik.yml.example`).
 
-Variables requises (voir `sc/traefik/traefik.env.example`) :
+Variables requises (voir `socle/traefik/traefik.env.example`) :
 
 | Variable | Rôle |
 |---|---|
@@ -270,7 +270,7 @@ Variables requises (voir `sc/traefik/traefik.env.example`) :
 | `TRAEFIK_PROXY_NETWORK_SUBNET` | Sous-réseau fixe du réseau partagé (`10.0.0.0/16`) |
 | `TRAEFIK_PROXY_IP` | IP fixe de Traefik lui-même sur `net_proxy` (`10.0.2.0`, formalisme `10.0.X.Y`) |
 
-Secrets requis (voir `sc/traefik/secrets.example/`) :
+Secrets requis (voir `socle/traefik/secrets.example/`) :
 
 | Fichier | Contenu |
 |---|---|

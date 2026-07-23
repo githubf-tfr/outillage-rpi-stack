@@ -34,15 +34,22 @@ proposant une alternative "meilleure" de sa propre initiative.
 2026-07-23, à l'occasion de `traefik/` : 3 catégories, **les mêmes** que les
 blocs `/16` du plan d'adressage réseau (cf. plus bas et `README.md`) —
 `infra/` (infrastructure), `sc/` (services communs), `metier/` (services
-métiers, vide pour l'instant).
+métiers, vide pour l'instant). **Fusionnées le 2026-07-23** (2ème
+renumérotation du même jour) : la distinction infrastructure/services
+communs s'est révélée peu utile en pratique (aucun des deux n'a de règle
+propre qui la justifie) — `infra/` et `sc/` deviennent un seul dossier
+`socle/` (« socle technique »), `metier/` reste séparé (seule distinction
+qui compte réellement : ce qui sert de fondation technique vs. ce qui est
+un service métier réel). Désormais 2 catégories, toujours les mêmes que les
+blocs `/16` : `socle/`, `metier/` (vide pour l'instant).
 
 **Important : cet axe de catégorisation est différent de celui rejeté plus
 tôt.** Ce repo a explicitement écarté un découpage par *mécanisme de
 déploiement* (`compose/` brut vs `stacks/` API Portainer, cf. historique
 Git) — ce choix-là reste entièrement au consommateur, indépendant de la
-structure. Le découpage `infra/`/`sc/`/`metier/` catégorise par **rôle du
+structure. Le découpage `socle/`/`metier/` catégorise par **rôle du
 service**, pas par mécanisme : un service peut vivre dans n'importe laquelle
-des 3 catégories quel que soit son mode de déploiement réel.
+des 2 catégories quel que soit son mode de déploiement réel.
 
 Portainer reste malgré tout un cas particulier *fonctionnel* (documenté dans
 son propre `compose.yaml`, pas dans l'arborescence) : il ne peut pas se
@@ -54,16 +61,15 @@ dans ce repo.
 ```
 rpi-stack/
 ├── CLAUDE.md
-├── infra/
+├── socle/
 │   ├── portainer/
 │   │   ├── compose.yaml            # template, ${VAR} uniquement
 │   │   ├── portainer.env.example   # modele des valeurs non secretes
 │   │   └── secrets.example/        # modele des secrets (noms de fichiers, valeurs factices)
-│   └── ddclient/
-│       ├── compose.yaml            # template, ${VAR} uniquement
-│       ├── ddclient.env.example    # modele des valeurs non secretes
-│       └── ddclient.conf.example   # modele du fichier de config complet (voir note ci-dessous)
-├── sc/
+│   ├── ddclient/
+│   │   ├── compose.yaml            # template, ${VAR} uniquement
+│   │   ├── ddclient.env.example    # modele des valeurs non secretes
+│   │   └── ddclient.conf.example   # modele du fichier de config complet (voir note ci-dessous)
 │   └── traefik/
 │       ├── compose.yaml            # template, ${VAR} uniquement
 │       ├── traefik.env.example     # modele des valeurs non secretes
@@ -95,22 +101,23 @@ ici (zéro code, cf. règle d'or ci-dessus).
 ## Conventions des `compose.yaml`
 
 Ces règles s'appliquent à tout nouveau template (elles ont été rétrofittées
-sur `infra/portainer/` pour rester cohérentes dès le début). Un exemple de
+sur `socle/portainer/` pour rester cohérentes dès le début). Un exemple de
 référence à 2 conteneurs (serveur + bdd) illustrant l'ensemble de ces règles
 vit dans `exemple/` (`compose.yaml` / `exemple.env.example` /
 `secrets.example/`) — **volontairement à la racine, hors catégorie** :
 n'étant pas un service réellement déployé, il n'a pas sa place dans
-`infra/`/`sc/`/`metier/`.
+`socle/`/`metier/`.
 
 - **Réseau en `/24`** — chaque stack a son propre sous-réseau Docker dédié,
   toujours en `/24` (à documenter en commentaire à côté de la variable de
   subnet, ex. `PORTAINER_NETWORK_SUBNET`), alloué depuis un bloc `/16` fixe
-  selon la catégorie du service — renumérotée le 2026-07-23 pour laisser
-  `10.0.0.0/16` au réseau `proxy` partagé (cf. plus bas) : infrastructure
-  `10.1.0.0/16`, services communs `10.2.0.0/16`, services métiers
-  `10.3.0.0/16`. Le registre des allocations `/24` actuelles vit dans
-  `README.md` (« Plan d'adressage réseau ») — à tenir à jour à chaque
-  nouveau service, pour éviter les collisions de sous-réseau.
+  selon la catégorie du service — renumérotée une 2ème fois le 2026-07-23
+  (fusion infra/sc en `socle/`, cf. « Structure » plus haut) : `10.0.0.0/16`
+  reste au réseau `proxy` partagé (cf. plus bas), socle technique
+  `10.1.0.0/16`, services métiers `10.2.0.0/16`. Le registre des allocations
+  `/24` actuelles vit dans `README.md` (« Plan d'adressage réseau ») — à
+  tenir à jour à chaque nouveau service, pour éviter les collisions de
+  sous-réseau.
 - **IP fixe par conteneur, en variable** — chaque conteneur a une IP fixe
   dans ce `/24`, jamais de dépendance à la DNS interne Docker. Convention
   d'adressage : `.100` = serveur/web, `.10` = bdd (à rappeler en commentaire
@@ -155,11 +162,11 @@ privé, en le déclarant `external: true` chez elles (même nom de réseau).
   laissé à l'attribution libre de Docker depuis le 2026-07-23) — permet des
   IP fixes cohérentes aux stacks qui le rejoignent.
 - **Adressage de chaque service sur ce réseau : `10.0.X.Y`**, où `X` = code
-  de catégorie (`1` infra, `2` sc, `3` métier — mêmes chiffres que les blocs
-  `/16` privés) et `Y` = le 3ème octet du `/24` privé de ce service (sa
-  position dans sa catégorie). Ex. `portainer` (`10.1.0.0/24`, 3ème octet
-  `0`) → `10.0.1.0` sur `proxy` ; `traefik` lui-même (`10.2.0.0/24`, 3ème
-  octet `0`) → `10.0.2.0`. Registre à jour dans `README.md`.
+  de catégorie (`1` socle, `2` métier — mêmes chiffres que les blocs `/16`
+  privés) et `Y` = le 3ème octet du `/24` privé de ce service (sa position
+  dans sa catégorie). Ex. `portainer` (`10.1.0.0/24`, 3ème octet `0`) →
+  `10.0.1.0` sur `proxy` ; `traefik` lui-même (`10.1.2.0/24`, 3ème octet
+  `2`) → `10.0.1.2`. Registre à jour dans `README.md`.
 - **Point ouvert, pas encore tranché** : si une stack a un jour besoin de
   plusieurs URLs Traefik distinctes (donc potentiellement plusieurs adresses
   sur `net_proxy` pour un seul service), le schéma d'adressage à utiliser
@@ -169,7 +176,7 @@ privé, en le déclarant `external: true` chez elles (même nom de réseau).
   premier besoin réel se présente, ne pas improviser une extension du
   formalisme `10.0.X.Y` sans validation.
 - La stack qui **crée** le réseau partagé le fait sans `external: true` (cf.
-  `sc/traefik/compose.yaml`, réseau `proxy`) — elle en est le *bootstrap*, même
+  `socle/traefik/compose.yaml`, réseau `proxy`) — elle en est le *bootstrap*, même
   logique que Portainer pour les stacks Docker en général.
 - Nom de ce réseau partagé, en variable dédiée côté créateur (ex.
   `TRAEFIK_PROXY_NETWORK_NAME=net_proxy`) — distinct du `/24` privé de la
@@ -182,7 +189,7 @@ privé, en le déclarant `external: true` chez elles (même nom de réseau).
   vraiment besoin de la découverte automatique par labels Docker.
 - Un backend **délocalisé** (hors Docker/hors hôte : NAS, autre Pi,
   cluster...) n'a besoin d'aucun réseau partagé — juste d'une IP:port
-  joignable (cf. `sc/traefik/dynamic/exemple-delocalise.yml.example`).
+  joignable (cf. `socle/traefik/dynamic/exemple-delocalise.yml.example`).
 - Cet amendement ne s'applique **qu'aux stacks qui en ont explicitement
   besoin** (routage/proxy, ou une stack backend qui veut être routée via
   Traefik) — la règle par défaut (un `/24` dédié, point) reste la norme pour
@@ -199,10 +206,10 @@ via `net_proxy`/labels : il est déployé *avant* que `traefik` (et donc
 Portainer) rien que pour lui.
 
 À la place : Traefik route vers Portainer via le **provider file**, exacte-
-ment comme un backend délocalisé (cf. `sc/traefik/dynamic/portainer.yml.example`)
+ment comme un backend délocalisé (cf. `socle/traefik/dynamic/portainer.yml.example`)
 — une simple entrée `IP:port` pointant sur l'accès déjà publié de Portainer
-(`PORTAINER_BIND_ADDR:9000`, cf. `infra/portainer/portainer.env.example`).
-Zéro changement dans `infra/portainer/compose.yaml`, zéro label, zéro
+(`PORTAINER_BIND_ADDR:9000`, cf. `socle/portainer/portainer.env.example`).
+Zéro changement dans `socle/portainer/compose.yaml`, zéro label, zéro
 réseau partagé, zéro dépendance d'ordre de déploiement — Portainer garde
 aussi son accès direct existant en fallback. Ce pattern (provider file vers
 un service local déjà publié sur l'hôte, pas seulement vers du vraiment
