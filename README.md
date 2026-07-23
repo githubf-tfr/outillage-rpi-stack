@@ -31,8 +31,8 @@ Allocations actuelles — **à tenir à jour à chaque nouveau service** :
 
 | Stack | Catégorie | Subnet privé | Réseau/interface | IP sur `net_proxy` |
 |---|---|---|---|---|
-| `portainer` | infrastructure | `10.1.0.0/24` | `net_portainer` | `10.0.1.0` |
-| `ddclient` | infrastructure | `10.1.1.0/24` | `net_ddclient` | — (ne rejoint pas `net_proxy`) |
+| `portainer` | infrastructure | `10.1.0.0/24` | `net_portainer` | — (routé via provider file, pas `net_proxy` — cf. ci-dessous) |
+| `ddclient` | infrastructure | `10.1.1.0/24` | `net_ddclient` | — (pas d'interface web, rien à router) |
 | `traefik` | services communs | `10.2.0.0/24` | `net_traefik` | `10.0.2.0` (créateur du réseau) |
 
 Prochain `/24` libre : `10.1.2.0/24` (infrastructure) ; `10.2.1.0/24`
@@ -54,8 +54,10 @@ n'a besoin de rien de tout ça — juste une IP:port dans la config `dynamic/`.
   `3` métier — mêmes chiffres que les blocs `/16` privés) et `Y` = le 3ème
   octet du `/24` privé du service (sa position dans sa catégorie). Ex. si un
   service infra en 3ème position (`10.1.2.0/24`) rejoignait `net_proxy`, il
-  aurait `10.0.1.2`. `ddclient` n'y figure pas : pas d'interface web (config
-  uniquement par `ddclient.conf`, cf. sa fiche plus bas), rien à router.
+  aurait `10.0.1.2`. **Aucune stack ne le rejoint aujourd'hui** — `ddclient`
+  n'a pas d'interface web (rien à router), `portainer` est routé autrement
+  (cf. « Pourquoi Portainer n'est pas sur `net_proxy` » ci-dessous) ; le
+  mécanisme reste prêt pour un futur service qui en aurait vraiment besoin.
 - **Point ouvert, pas encore tranché** : si une stack a besoin de plusieurs
   URLs Traefik distinctes (donc potentiellement plusieurs adresses sur ce
   réseau pour un seul service), le schéma à utiliser n'est pas décidé —
@@ -65,7 +67,26 @@ n'a besoin de rien de tout ça — juste une IP:port dans la config `dynamic/`.
 
 | Réseau partagé | Créé par | Rejoint par |
 |---|---|---|
-| `net_proxy` | `traefik` | `portainer` ; toute autre stack locale qui veut être routée via Traefik (`external: true`) |
+| `net_proxy` | `traefik` | personne aujourd'hui — prêt pour une future stack locale qui voudrait être routée via Traefik avec découverte auto par labels (`external: true`) |
+
+### Pourquoi Portainer n'est pas sur `net_proxy`
+
+Décidé le 2026-07-23, après un premier essai (Portainer rejoignant
+`net_proxy` + labels `traefik.*`) revenu en arrière — complexité pas
+justifiée par le gain. Portainer veut du TLS Let's Encrypt, mais **pas**
+via `net_proxy`/labels : il est déployé *avant* que `traefik` (et donc
+`net_proxy`) n'existe, ce qui aurait imposé une dance en deux temps
+(déployer Portainer, déployer Traefik, réappliquer le `compose.yaml` de
+Portainer) rien que pour lui.
+
+À la place, Traefik route vers Portainer via le **provider file** — exacte-
+ment comme un backend délocalisé (cf. `sc/traefik/dynamic/portainer.yml.example`) :
+une simple entrée `IP:port` pointant sur l'accès déjà publié de Portainer
+(`PORTAINER_BIND_ADDR:9000`). Zéro changement dans son `compose.yaml`, zéro
+label, zéro réseau partagé, zéro dépendance d'ordre de déploiement —
+Portainer garde aussi son accès direct existant en fallback. Réutilisable
+pour tout futur service qui veut du TLS Traefik sans les contraintes de
+`net_proxy`.
 
 ### Ordre de déploiement
 
@@ -74,11 +95,10 @@ n'a besoin de rien de tout ça — juste une IP:port dans la config `dynamic/`.
 `net_proxy`), déployé juste après, en 2ème. Compose refuse un réseau
 `external` introuvable — pas de contournement possible sur l'ordre.
 
-**Seul Portainer a besoin du coup en deux temps** (déployer, puis
-réappliquer son `compose.yaml`) — il est forcément déployé avant que
-`net_proxy` existe. **Toute stack déployée après Traefik** peut inclure le
-réseau `proxy` et ses labels `traefik.*` dès son tout premier déploiement,
-sans dance en deux temps.
+Aujourd'hui, aucune stack n'a besoin de rejoindre `net_proxy` (Portainer
+utilise le provider file, cf. ci-dessus) — cette contrainte d'ordre ne
+s'applique pour l'instant qu'à un futur service qui en aurait explicitement
+besoin.
 
 #### Rattacher une stack pré-existante à `net_proxy`
 
@@ -142,10 +162,11 @@ Particularités du template :
   wget/curl/shell dedans) et Portainer n'a pas de sous-commande CLI dédiée ;
   un healthcheck HTTP classique est donc impossible sans changer l'image
   (`-alpine`), pas fait ici. Détail en commentaire dans `compose.yaml`.
-- **Rejoint `net_proxy`** en plus de son `/24` privé (labels `traefik.*`,
-  IP fixe dessus) — routable via Traefik, en garde l'accès direct existant
-  en fallback. Nécessite que `traefik` soit déjà déployé (cf. « Ordre de
-  déploiement » ci-dessus) avant de réappliquer ce `compose.yaml`.
+- **Ne rejoint pas `net_proxy`** — pas de label `traefik.*`, pas de réseau
+  partagé. Pour du TLS Let's Encrypt, Traefik route vers lui via le
+  *provider file* (IP:port déjà publiée, cf. `sc/traefik/dynamic/portainer.yml.example`
+  et « Pourquoi Portainer n'est pas sur `net_proxy` » plus haut) — l'accès
+  direct `PORTAINER_BIND_ADDR:9000` reste utilisable en fallback.
 
 Variables requises (voir `infra/portainer/portainer.env.example`) :
 
@@ -158,8 +179,6 @@ Variables requises (voir `infra/portainer/portainer.env.example`) :
 | `PORTAINER_NETWORK_NAME` | Nom de réseau Docker (`net_portainer`) |
 | `PORTAINER_NETWORK_IFACE` | Nom d'interface bridge (`net_portainer`, à garder identique par convention) |
 | `PORTAINER_DATA_DIR` | Chemin hôte pour la persistance des données |
-| `PORTAINER_PROXY_IP` | IP fixe sur `net_proxy` (`10.0.1.0`, formalisme `10.0.X.Y`) |
-| `PORTAINER_TRAEFIK_HOST` | Nom d'hôte pour le routage Traefik (label `Host(...)`) |
 
 Secrets requis (voir `infra/portainer/secrets.example/`) :
 
@@ -212,8 +231,11 @@ Particularités du template :
   particulier » du `CLAUDE.md`).
 - Deux réseaux Docker : son `/24` privé classique, **et** `net_proxy`, réseau
   partagé qu'il crée pour router les stacks locales (voir « Réseau `proxy`
-  partagé » ci-dessus). Un backend délocalisé (NAS, autre Pi...) n'a besoin
-  d'aucun des deux — juste une entrée `dynamic/*.yml` avec une IP:port.
+  partagé » ci-dessus) — pas encore rejoint par aucune stack aujourd'hui. Un
+  backend délocalisé (NAS, autre Pi...) **ou même un service local déjà
+  publié sur l'hôte** (ex. Portainer, cf. `dynamic/portainer.yml.example`)
+  n'a besoin d'aucun des deux réseaux — juste une entrée `dynamic/*.yml`
+  avec une IP:port.
 - `exposedByDefault: false` — un conteneur n'est routé que s'il porte
   `traefik.enable=true` en label, jamais de découverte automatique.
 - Dashboard jamais exposé nu (`api.insecure: false`), routé via un middleware

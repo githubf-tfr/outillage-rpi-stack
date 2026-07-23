@@ -1,0 +1,29 @@
+# Exemple de config dynamique (provider file) -- route Portainer via
+# Traefik SANS le faire rejoindre net_proxy : Portainer garde tel quel son
+# acces direct existant (PORTAINER_BIND_ADDR:9000, cf. portainer.env.example
+# de infra/portainer/), Traefik pointe simplement dessus comme un backend
+# "delocalise" (meme mecanisme que dynamic/exemple-delocalise.yml.example,
+# cf. README.md "Pourquoi Portainer n'est pas sur net_proxy"). Zero label,
+# zero reseau Docker partage, zero dance en deux temps -- juste une IP:port
+# deja publiee, TLS gere par Traefik. A copier dans TRAEFIK_DYNAMIC_CONFIG_DIR,
+# adapter le host et l'IP:port (= PORTAINER_BIND_ADDR reel + :9000).
+
+http:
+  routers:
+    portainer:
+      rule: "Host(`portainer.exemple.com`)"
+      service: portainer
+      entryPoints:
+        - websecure
+      tls:
+        certResolver: letsencrypt
+
+  services:
+    portainer:
+      loadBalancer:
+        servers:
+          # IP:port deja publies par Portainer sur l'hote (PORTAINER_BIND_ADDR
+          # + port 9000, cf. infra/portainer/compose.yaml) -- pas l'IP Docker
+          # interne de Portainer (10.1.0.100, non joignable depuis le
+          # conteneur Traefik, reseaux Docker isoles l'un de l'autre).
+          - url: "http://192.0.2.10:9000"

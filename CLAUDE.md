@@ -174,9 +174,12 @@ privé, en le déclarant `external: true` chez elles (même nom de réseau).
 - Nom de ce réseau partagé, en variable dédiée côté créateur (ex.
   `TRAEFIK_PROXY_NETWORK_NAME=net_proxy`) — distinct du `/24` privé de la
   stack (`TRAEFIK_NETWORK_NAME`/`TRAEFIK_NETWORK_SUBNET`), qui reste géré
-  normalement. Côté stacks qui le **rejoignent**, le nom est en dur
+  normalement. Côté stacks qui le **rejoindraient**, le nom serait en dur
   (`net_proxy`, constante partagée devant correspondre exactement à ce que
-  `traefik` a créé) plutôt qu'en `${VAR}` — cf. `infra/portainer/compose.yaml`.
+  `traefik` a créé) plutôt qu'en `${VAR}` — aucune stack ne le rejoint
+  aujourd'hui (cf. « Pourquoi Portainer n'est pas sur `net_proxy` »
+  ci-dessous), mécanisme prêt pour un futur service local qui aurait
+  vraiment besoin de la découverte automatique par labels Docker.
 - Un backend **délocalisé** (hors Docker/hors hôte : NAS, autre Pi,
   cluster...) n'a besoin d'aucun réseau partagé — juste d'une IP:port
   joignable (cf. `sc/traefik/dynamic/exemple-delocalise.yml.example`).
@@ -185,21 +188,37 @@ privé, en le déclarant `external: true` chez elles (même nom de réseau).
   Traefik) — la règle par défaut (un `/24` dédié, point) reste la norme pour
   tout le reste.
 
+### Pourquoi Portainer n'est pas sur `net_proxy`
+
+Décidé le 2026-07-23, après un premier essai (Portainer rejoignant
+`net_proxy` + labels `traefik.*`) revenu en arrière — complexité pas
+justifiée par le gain. Portainer veut du TLS Let's Encrypt, mais **pas**
+via `net_proxy`/labels : il est déployé *avant* que `traefik` (et donc
+`net_proxy`) n'existe, ce qui aurait imposé une dance en deux temps
+(déployer Portainer, déployer Traefik, réappliquer le `compose.yaml` de
+Portainer) rien que pour lui.
+
+À la place : Traefik route vers Portainer via le **provider file**, exacte-
+ment comme un backend délocalisé (cf. `sc/traefik/dynamic/portainer.yml.example`)
+— une simple entrée `IP:port` pointant sur l'accès déjà publié de Portainer
+(`PORTAINER_BIND_ADDR:9000`, cf. `infra/portainer/portainer.env.example`).
+Zéro changement dans `infra/portainer/compose.yaml`, zéro label, zéro
+réseau partagé, zéro dépendance d'ordre de déploiement — Portainer garde
+aussi son accès direct existant en fallback. Ce pattern (provider file vers
+un service local déjà publié sur l'hôte, pas seulement vers du vraiment
+délocalisé) est réutilisable pour tout futur service qui veut du TLS Traefik
+sans les contraintes de `net_proxy`.
+
 ### Ordre de déploiement
 
-`net_proxy` n'existe qu'une fois la stack `traefik` déployée — toute stack
-qui veut le rejoindre doit donc être déployée (ou redéployée) **après**.
-Ordre concret pour ce repo : **Portainer** (bootstrap, toujours en premier)
-→ **Traefik** (crée `net_proxy`), déployé juste après, en 2ème. Pas de
-contournement possible : Compose refuse un réseau `external` introuvable.
-
-**Seul Portainer a besoin du coup en deux temps** (déployer, puis
-réappliquer son `compose.yaml` après coup) — parce qu'il est *forcément*
-déployé avant que `net_proxy` existe (bootstrap = tout premier). **Toute
-stack déployée après Traefik** (donc la quasi-totalité — `ddclient` compris
-si un jour il en avait besoin) peut inclure `network: proxy: {}` et ses
-labels `traefik.*` **dès son tout premier déploiement**, sans dance en deux
-temps : `net_proxy` existe déjà à ce moment-là.
+`net_proxy` n'existe qu'une fois la stack `traefik` déployée — toute
+(future) stack qui voudrait le rejoindre via labels Docker devrait donc être
+déployée (ou redéployée) **après**. Ordre concret pour ce repo : **Portainer**
+(bootstrap, toujours en premier) → **Traefik** (crée `net_proxy`), déployé
+juste après, en 2ème. Aujourd'hui, aucune stack n'a besoin de rejoindre
+`net_proxy` (Portainer utilise le provider file, cf. ci-dessus) — cette
+contrainte d'ordre ne s'applique pour l'instant qu'à un futur service qui en
+aurait explicitement besoin.
 
 ## Comment un projet consomme ce repo
 
