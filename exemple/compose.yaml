@@ -8,9 +8,8 @@ services:
   web:
     image: "${EXEMPLE_WEB_IMAGE}"
     # Nom de conteneur = variable, formalisme nomdelastack_xxx (juste
-    # "nomdelastack" si un seul conteneur dans la stack). Portainer fait
-    # exception (nom en dur "portainer") : conteneur unique + stack
-    # bootstrap qui ne peut pas etre generique sur ce point.
+    # "nomdelastack" si un seul conteneur dans la stack, ex. Portainer :
+    # PORTAINER_CONTAINER_NAME=portainer).
     container_name: "${EXEMPLE_WEB_CONTAINER_NAME}"
     restart: always
     volumes:

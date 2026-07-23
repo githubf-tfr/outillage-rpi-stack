@@ -132,9 +132,12 @@ Consommateurs connus : `rpi-nomade`
 - **Branche principale** : `main` (unique branche, tout va sur `main`)
 - Créé le 2026-07-22, premier commit : template Portainer bootstrap.
 
-## Pas de README séparé
+## `CLAUDE.md` vs `README.md`
 
-Comme `rpi-nomade` (règle "un seul fichier de doc générique"), ce repo n'a
-qu'un seul fichier d'explication : ce `CLAUDE.md`. S'il grossit au point de
-ne plus être qu'un contexte pour session mais une vraie doc utilisateur,
-envisager un `README.md` à ce moment-là — pas avant.
+Les deux coexistent, avec des rôles distincts :
+- **`CLAUDE.md`** (ce fichier) — conventions et contexte pour qui modifie ce
+  repo (règles de nommage, structure, mécanisme de consommation) ; pas
+  destiné à cataloguer chaque stack en détail.
+- **`README.md`** — doc utilisateur : catalogue des stacks disponibles
+  (une fiche par service, variables/secrets requis) et comment les
+  consommer, pour qui découvre le repo sans contexte de session.
