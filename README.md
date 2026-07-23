@@ -5,6 +5,12 @@ Ce repo ne contient **aucune valeur concrète, aucun secret** — uniquement des
 templates (`${VAR}`) et des fichiers `.example`. Les valeurs réelles sont
 apportées par le projet consommateur (ex. `rpi-nomade`).
 
+> **Conventions figées.** Structure, nommage et plan d'adressage réseau
+> (ci-dessous) sont des règles actées avec l'utilisateur — pas des choix
+> libres. Tout assistant (LLM ou autre) qui s'en écarte, ou qui propose une
+> alternative en créant un nouveau service, doit d'abord obtenir l'accord
+> explicite de l'utilisateur (détail dans `CLAUDE.md`).
+
 ---
 
 ## Plan d'adressage réseau (Docker)

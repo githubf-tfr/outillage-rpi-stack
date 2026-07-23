@@ -17,6 +17,15 @@ contient que des `compose.yaml` (syntaxe Compose native `${VAR}`/
 de rôle Ansible) — ça, c'est le rôle du consommateur et de ses propres
 outils (ex. `rpi-stage`, rôle `docker-compose-stack` ou `portainer-stack`).
 
+**Conventions figées — pas de déviation sans accord explicite.** La
+structure (1 dossier = 1 service), le nommage des variables/conteneurs/
+volumes/réseaux et le plan d'adressage réseau (cf. plus bas et
+`README.md`) sont des décisions actées avec l'utilisateur, pas des choix
+libres. Tout assistant (LLM ou autre) qui modifie ce repo, ou qui s'en
+inspire pour créer un nouveau service, doit **obtenir l'accord explicite
+de l'utilisateur avant de s'écarter de ces conventions** — y compris en
+proposant une alternative "meilleure" de sa propre initiative.
+
 ## Structure
 
 **1 dossier = 1 service**, à plat à la racine du repo (`compose.yaml` +
