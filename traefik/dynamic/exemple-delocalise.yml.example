@@ -1,0 +1,23 @@
+# Exemple de config dynamique (provider file) -- route vers un backend
+# DELOCALISE (hors Docker, hors ce Pi : un NAS, un autre Pi, un cluster
+# k3s...). Aucun reseau Docker partage necessaire pour ce cas -- juste une
+# IP:port joignable. A copier dans TRAEFIK_DYNAMIC_CONFIG_DIR, adapter.
+
+http:
+  routers:
+    exemple-delocalise:
+      rule: "Host(`nas.exemple.com`)"
+      service: exemple-delocalise
+      entryPoints:
+        - websecure
+      tls:
+        certResolver: letsencrypt
+
+  services:
+    exemple-delocalise:
+      loadBalancer:
+        servers:
+          # IP:port du backend externe -- Traefik ne sait pas (et n'a pas
+          # besoin de savoir) que ce n'est pas un conteneur local. Plusieurs
+          # entrees "servers" possibles ici pour du load-balancing simple.
+          - url: "http://192.168.1.50:5000"

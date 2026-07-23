@@ -52,10 +52,15 @@ rpi-stack/
 │   ├── compose.yaml            # template, ${VAR} uniquement
 │   ├── portainer.env.example   # modele des valeurs non secretes
 │   └── secrets.example/        # modele des secrets (noms de fichiers, valeurs factices)
-└── ddclient/
+├── ddclient/
+│   ├── compose.yaml            # template, ${VAR} uniquement
+│   ├── ddclient.env.example    # modele des valeurs non secretes
+│   └── ddclient.conf.example   # modele du fichier de config complet (voir note ci-dessous)
+└── traefik/
     ├── compose.yaml            # template, ${VAR} uniquement
-    ├── ddclient.env.example    # modele des valeurs non secretes
-    └── ddclient.conf.example   # modele du fichier de config complet (voir note ci-dessous)
+    ├── traefik.env.example     # modele des valeurs non secretes
+    ├── traefik.yml.example     # modele de la config statique (voir note ci-dessous)
+    └── dynamic/                # modeles de config dynamique (routes), voir "Reseau proxy partage"
 ```
 
 ## Convention de nommage des variables
@@ -112,6 +117,31 @@ vit dans `exemple/` (`compose.yaml` / `exemple.env.example` /
   Exception de nommage (pas de découplage variable/valeur) : si la stack n'a
   qu'un seul conteneur, pas de suffixe — juste `nomdelastack` (ex.
   Portainer : `PORTAINER_CONTAINER_NAME=portainer`).
+
+## Réseau `proxy` partagé (amendement à la règle du `/24` par stack)
+
+Décidé le 2026-07-23, à l'occasion de `traefik/`. Une stack de routage
+(reverse-proxy type Traefik) a besoin de découvrir les conteneurs d'autres
+stacks locales pour les exposer — ça ne rentre pas dans « chaque stack a son
+propre `/24`, point ». Amendement : une stack de ce type peut, **en plus**
+de son `/24` dédié classique, **créer** un réseau Docker **partagé** (bridge,
+sans IPAM géré/pas de `/24` dédié — Docker attribue un sous-réseau libre) que
+les stacks backend **locales** rejoignent **en plus** de leur propre `/24`
+privé, en le déclarant `external: true` chez elles (même nom de réseau).
+
+- La stack qui **crée** le réseau partagé le fait sans `external: true` (cf.
+  `traefik/compose.yaml`, réseau `proxy`) — elle en est le *bootstrap*, même
+  logique que Portainer pour les stacks Docker en général.
+- Nom de ce réseau partagé, en variable dédiée (ex.
+  `TRAEFIK_PROXY_NETWORK_NAME=net_proxy`) — distinct du `/24` privé de la
+  stack (`TRAEFIK_NETWORK_NAME`/`TRAEFIK_NETWORK_SUBNET`), qui reste géré
+  normalement.
+- Un backend **délocalisé** (hors Docker/hors hôte : NAS, autre Pi,
+  cluster...) n'a besoin d'aucun réseau partagé — juste d'une IP:port
+  joignable (cf. `traefik/dynamic/exemple-delocalise.yml.example`).
+- Cet amendement ne s'applique **qu'aux stacks qui en ont explicitement
+  besoin** (routage/proxy) — la règle par défaut (un `/24` dédié, point)
+  reste la norme pour tout le reste.
 
 ## Comment un projet consomme ce repo
 

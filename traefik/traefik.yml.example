@@ -1,0 +1,63 @@
+# Config statique Traefik -- fichier complet fourni par le consommateur
+# (meme logique que ddclient.conf), monte en lecture seule via
+# TRAEFIK_STATIC_CONFIG_PATH. Pas de ${VAR} a l'interieur : Traefik ne
+# resout pas les variables d'environnement dans ce fichier.
+
+log:
+  level: INFO
+
+api:
+  dashboard: true
+  insecure: false   # jamais expose nu -- route via un router + middleware
+                     # auth dans dynamic/ (cf. dashboard.yml.example)
+
+entryPoints:
+  web:
+    address: ":80"
+    http:
+      # Redirection HTTP -> HTTPS systematique. A retirer seulement si un
+      # usage precis a besoin de HTTP en clair (rare).
+      redirections:
+        entryPoint:
+          to: websecure
+          scheme: https
+  websecure:
+    address: ":443"
+
+providers:
+  docker:
+    exposedByDefault: false   # opt-in explicite (label traefik.enable=true)
+                               # -- pas de decouverte automatique de tout ce
+                               # qui tourne, sinon chaque conteneur du Pi se
+                               # retrouve routable par accident.
+    network: "${TRAEFIK_PROXY_NETWORK_NAME}"   # reseau partage, cf. compose.yaml
+                                                 # (Traefik ne resout PAS ses
+                                                 # propres ${VAR} : remplacer
+                                                 # par la vraie valeur, ex.
+                                                 # net_proxy, dans le fichier
+                                                 # reel depose sur le Pi)
+  file:
+    directory: /etc/traefik/dynamic
+    watch: true
+
+certificatesResolvers:
+  letsencrypt:
+    acme:
+      email: change-me@exemple.com
+      storage: /letsencrypt/acme.json
+      # HTTP-01 : le plus simple, necessite juste que le port 80 soit
+      # joignable depuis Internet au moment du challenge.
+      httpChallenge:
+        entryPoint: web
+      # Alternative DNS-01 via OVH : pas besoin d'exposer le port 80,
+      # permet les certs wildcard (*.exemple.com). Necessite des
+      # identifiants API OVH (application key/secret + consumer key,
+      # generes sur https://api.ovh.com/createToken/) -- DIFFERENTS des
+      # identifiants DynHost utilises par ddclient (ceux-la ne donnent pas
+      # acces a l'API generaliste). A activer en retirant httpChallenge
+      # ci-dessus et decommentant ce qui suit, puis en passant
+      # OVH_ENDPOINT/OVH_APPLICATION_KEY/OVH_APPLICATION_SECRET/
+      # OVH_CONSUMER_KEY en variables d'environnement du conteneur
+      # (a ajouter dans compose.yaml si retenu -- pas fait ici par defaut).
+      # dnsChallenge:
+      #   provider: ovh

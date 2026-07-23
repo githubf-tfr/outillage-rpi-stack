@@ -31,10 +31,25 @@ Allocations actuelles — **à tenir à jour à chaque nouveau service** :
 |---|---|---|---|
 | `portainer` | infrastructure | `10.0.0.0/24` | `net_portainer` |
 | `ddclient` | infrastructure | `10.0.1.0/24` | `net_ddclient` |
+| `traefik` | services communs | `10.1.0.0/24` | `net_traefik` |
 
-Prochain `/24` libre : `10.0.2.0/24` (infrastructure) ; `10.1.0.0/24`
-(services communs, bloc encore inutilisé) ; `10.2.0.0/24` (services
-métiers, bloc encore inutilisé).
+Prochain `/24` libre : `10.0.2.0/24` (infrastructure) ; `10.1.1.0/24`
+(services communs) ; `10.2.0.0/24` (services métiers, bloc encore inutilisé).
+
+### Réseau `proxy` partagé (routage)
+
+Amendement à la règle « un `/24` par stack » (cf. `CLAUDE.md`) pour les
+stacks de routage type Traefik : en plus de son `/24` privé, ce genre de
+stack **crée** un réseau Docker bridge **partagé** (pas de `/24` dédié,
+Docker lui attribue un sous-réseau libre) que les stacks backend **locales**
+rejoignent **en plus** de leur propre `/24`, en le déclarant `external: true`
+chez elles (auto-découverte par labels via le *provider* Docker de Traefik).
+Un backend **délocalisé** (NAS, autre Pi, cluster...) n'a besoin de rien de
+tout ça — juste une IP:port dans la config `dynamic/`.
+
+| Réseau partagé | Créé par | Rejoint par |
+|---|---|---|
+| `net_proxy` | `traefik` | toute stack locale qui veut être routée via Traefik (`external: true`) |
 
 ---
 
@@ -99,6 +114,50 @@ Variables requises (voir `ddclient/ddclient.env.example`) :
 | `DDCLIENT_NETWORK_IP` | IP fixe de ddclient dans ce sous-réseau (`.100`) |
 | `DDCLIENT_NETWORK_NAME` | Nom de réseau Docker (`net_ddclient`) |
 | `DDCLIENT_NETWORK_IFACE` | Nom d'interface bridge (`net_ddclient`, à garder identique par convention) |
+
+---
+
+### `traefik/` — reverse proxy + TLS (services communs)
+
+Expose les futurs services métiers derrière TLS (ACME/Let's Encrypt). N'existe
+que pour router d'autres stacks — d'où sa catégorie « services communs »
+plutôt qu'infrastructure.
+
+Particularités du template :
+
+- Config statique (`traefik.yml`) et dynamique (`dynamic/*.yml`) en fichiers
+  complets, pas en `${VAR}` — même logique que `ddclient.conf` (voir « Cas
+  particulier » du `CLAUDE.md`).
+- Deux réseaux Docker : son `/24` privé classique, **et** `net_proxy`, réseau
+  partagé qu'il crée pour router les stacks locales (voir « Réseau `proxy`
+  partagé » ci-dessus). Un backend délocalisé (NAS, autre Pi...) n'a besoin
+  d'aucun des deux — juste une entrée `dynamic/*.yml` avec une IP:port.
+- `exposedByDefault: false` — un conteneur n'est routé que s'il porte
+  `traefik.enable=true` en label, jamais de découverte automatique.
+- Dashboard jamais exposé nu (`api.insecure: false`), routé via un middleware
+  `basicAuth` (`dynamic/dashboard.yml.example`).
+- `docker.sock` monté en lecture seule pour l'auto-découverte — accès
+  équivalent root sur l'hôte, même arbitrage déjà accepté pour Portainer.
+- TLS : challenge HTTP-01 par défaut (port 80 joignable) ; alternative DNS-01
+  via OVH documentée en commentaire dans `traefik.yml.example` (pas de port
+  80 exposé, certs wildcard, mais identifiants API OVH différents de ceux de
+  `ddclient`).
+
+Variables requises (voir `traefik/traefik.env.example`) :
+
+| Variable | Rôle |
+|---|---|
+| `TRAEFIK_CONTAINER_NAME` | Nom du conteneur (`traefik`, un seul conteneur dans la stack) |
+| `TRAEFIK_BIND_ADDR` | IP d'écoute des ports 80/443 |
+| `TRAEFIK_HTTP_PORT` / `TRAEFIK_HTTPS_PORT` | Ports hôte publiés vers 80/443 |
+| `TRAEFIK_STATIC_CONFIG_PATH` | Chemin hôte vers `traefik.yml` réel |
+| `TRAEFIK_DYNAMIC_CONFIG_DIR` | Dossier hôte vers les `dynamic/*.yml` réels |
+| `TRAEFIK_ACME_DIR` | Dossier hôte des certificats ACME (`acme.json` à pré-créer en `chmod 600`) |
+| `TRAEFIK_NETWORK_SUBNET` | Sous-réseau Docker interne de la stack, en `/24` |
+| `TRAEFIK_NETWORK_IP` | IP fixe de Traefik dans ce sous-réseau (`.100`) |
+| `TRAEFIK_NETWORK_NAME` | Nom de réseau Docker (`net_traefik`) |
+| `TRAEFIK_NETWORK_IFACE` | Nom d'interface bridge (`net_traefik`, à garder identique par convention) |
+| `TRAEFIK_PROXY_NETWORK_NAME` | Nom du réseau partagé de routage (`net_proxy`), créé par cette stack |
 
 ---
 

@@ -1,0 +1,70 @@
+# traefik/compose.yaml -- template generique de stack Traefik
+# (reverse proxy + TLS, service COMMUN : consomme par les futurs services
+# metiers qui veulent etre exposes). Aucune valeur ici : tout passe par
+# ${VAR}, resolues par le consommateur (fichier .env depose a cote via
+# docker_compose_stack_env_file, ou Environment variables de la Stack
+# Portainer -- cf. CLAUDE.md de ce repo).
+
+services:
+  traefik:
+    image: traefik:v3.1
+    container_name: "${TRAEFIK_CONTAINER_NAME}"
+    restart: always
+    command:
+      - "--configFile=/etc/traefik/traefik.yml"
+    ports:
+      # PAS 0.0.0.0 : Docker contourne ufw pour ses ports publies (chaine
+      # FORWARD/DNAT, pas filtree par la politique par defaut d'ufw) -- le
+      # consommateur fixe l'adresse de bind explicitement (TRAEFIK_BIND_ADDR).
+      - "${TRAEFIK_BIND_ADDR}:${TRAEFIK_HTTP_PORT}:80"
+      - "${TRAEFIK_BIND_ADDR}:${TRAEFIK_HTTPS_PORT}:443"
+    volumes:
+      # Config statique -- fichier complet fourni par le consommateur
+      # (meme logique que ddclient.conf), pas de ${VAR} a l'interieur
+      # (Traefik ne resout pas les variables d'environnement dans ce
+      # fichier).
+      - "${TRAEFIK_STATIC_CONFIG_PATH}:/etc/traefik/traefik.yml:ro"
+      # Config dynamique (provider file) -- dossier, plusieurs .yml
+      # possibles (routes vers services locaux OU delocalises, cf. README).
+      - "${TRAEFIK_DYNAMIC_CONFIG_DIR}:/etc/traefik/dynamic:ro"
+      # Certificats ACME -- persistant, doit contenir un acme.json pre-cree
+      # en chmod 600 AVANT le premier demarrage (cf. .env.example, meme
+      # piege que le mkdir -p prealable des volumes bind Portainer).
+      - "${TRAEFIK_ACME_DIR}:/letsencrypt"
+      # Provider Docker (auto-decouverte des backends locaux par labels) --
+      # lecture seule. Donne a Traefik un acces equivalent root sur l'hote
+      # (meme arbitrage que Portainer/docker.sock) : accepte en connaissance
+      # de cause ; alternative = docker-socket-proxy en sidecar si besoin de
+      # restreindre plus tard (pas fait ici, cf. README).
+      - "/var/run/docker.sock:/var/run/docker.sock:ro"
+    networks:
+      network:
+        # Convention d'adressage rpi-stack : .100 = serveur/web, .10 = bdd
+        # (ici, un seul conteneur, .100).
+        ipv4_address: "${TRAEFIK_NETWORK_IP}"
+      proxy: {}
+
+networks:
+  # Reseau bridge DEDIE a cette stack, sous-reseau propre, TOUJOURS en /24
+  # -- meme convention que les autres stacks (registre : rpi-stack/README.md,
+  # "Plan d'adressage reseau"). N'est PAS le reseau de routage vers les
+  # backends -- juste le reseau "maison" de Traefik lui-meme.
+  network:
+    name: "${TRAEFIK_NETWORK_NAME}"
+    driver: bridge
+    driver_opts:
+      com.docker.network.bridge.name: "${TRAEFIK_NETWORK_IFACE}"
+    ipam:
+      driver: default
+      config:
+        - subnet: "${TRAEFIK_NETWORK_SUBNET}"
+  # Reseau PARTAGE, CREE par cette stack (Traefik = bootstrap du reseau de
+  # routage, meme logique que Portainer pour les stacks Docker) -- les
+  # stacks backend LOCALES qui veulent etre routees via le provider Docker
+  # (auto-decouverte par labels) le rejoignent en plus de leur propre
+  # reseau prive, en declarant ce reseau "external: true" chez elles. Un
+  # backend DELOCALISE (autre hote, cf. README) n'a besoin de rien de tout
+  # ca -- provider file + IP:port suffit.
+  proxy:
+    name: "${TRAEFIK_PROXY_NETWORK_NAME}"
+    driver: bridge

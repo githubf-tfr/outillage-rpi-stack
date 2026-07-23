@@ -1,0 +1,26 @@
+# Exemple de config dynamique (provider file) -- route le dashboard
+# Traefik lui-meme, protege par une authentification basique. A copier
+# dans TRAEFIK_DYNAMIC_CONFIG_DIR, adapter le host et le hash du mot de
+# passe.
+
+http:
+  routers:
+    dashboard:
+      rule: "Host(`traefik.exemple.com`)"
+      service: api@internal   # service special, fourni par Traefik lui-meme
+      entryPoints:
+        - websecure
+      tls:
+        certResolver: letsencrypt
+      middlewares:
+        - dashboard-auth
+
+  middlewares:
+    dashboard-auth:
+      basicAuth:
+        # Genere avec : htpasswd -nB utilisateur
+        # (le $ doit etre double $$ dans un fichier Compose .env, mais PAS
+        # ici -- ce fichier n'est jamais passe dans un ${VAR} Compose, donc
+        # un seul $ suffit).
+        users:
+          - "admin:$2y$05$changeme-remplacer-par-un-vrai-hash-bcrypt"
