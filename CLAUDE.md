@@ -105,11 +105,12 @@ n'étant pas un service réellement déployé, il n'a pas sa place dans
 - **Réseau en `/24`** — chaque stack a son propre sous-réseau Docker dédié,
   toujours en `/24` (à documenter en commentaire à côté de la variable de
   subnet, ex. `PORTAINER_NETWORK_SUBNET`), alloué depuis un bloc `/16` fixe
-  selon la catégorie du service : infrastructure `10.0.0.0/16`, services
-  communs `10.1.0.0/16`, services métiers `10.2.0.0/16`. Le registre des
-  allocations `/24` actuelles vit dans `README.md` (« Plan d'adressage
-  réseau ») — à tenir à jour à chaque nouveau service, pour éviter les
-  collisions de sous-réseau.
+  selon la catégorie du service — renumérotée le 2026-07-23 pour laisser
+  `10.0.0.0/16` au réseau `proxy` partagé (cf. plus bas) : infrastructure
+  `10.1.0.0/16`, services communs `10.2.0.0/16`, services métiers
+  `10.3.0.0/16`. Le registre des allocations `/24` actuelles vit dans
+  `README.md` (« Plan d'adressage réseau ») — à tenir à jour à chaque
+  nouveau service, pour éviter les collisions de sous-réseau.
 - **IP fixe par conteneur, en variable** — chaque conteneur a une IP fixe
   dans ce `/24`, jamais de dépendance à la DNS interne Docker. Convention
   d'adressage : `.100` = serveur/web, `.10` = bdd (à rappeler en commentaire
@@ -146,24 +147,53 @@ Décidé le 2026-07-23, à l'occasion de `traefik/`. Une stack de routage
 (reverse-proxy type Traefik) a besoin de découvrir les conteneurs d'autres
 stacks locales pour les exposer — ça ne rentre pas dans « chaque stack a son
 propre `/24`, point ». Amendement : une stack de ce type peut, **en plus**
-de son `/24` dédié classique, **créer** un réseau Docker **partagé** (bridge,
-sans IPAM géré/pas de `/24` dédié — Docker attribue un sous-réseau libre) que
-les stacks backend **locales** rejoignent **en plus** de leur propre `/24`
+de son `/24` dédié classique, **créer** un réseau Docker **partagé** que les
+stacks backend **locales** rejoignent **en plus** de leur propre `/24`
 privé, en le déclarant `external: true` chez elles (même nom de réseau).
 
+- **Sous-réseau fixe : `10.0.0.0/16`**, réservé à ce réseau partagé (plus
+  laissé à l'attribution libre de Docker depuis le 2026-07-23) — permet des
+  IP fixes cohérentes aux stacks qui le rejoignent.
+- **Adressage de chaque service sur ce réseau : `10.0.X.Y`**, où `X` = code
+  de catégorie (`1` infra, `2` sc, `3` métier — mêmes chiffres que les blocs
+  `/16` privés) et `Y` = le 3ème octet du `/24` privé de ce service (sa
+  position dans sa catégorie). Ex. `portainer` (`10.1.0.0/24`, 3ème octet
+  `0`) → `10.0.1.0` sur `proxy` ; `traefik` lui-même (`10.2.0.0/24`, 3ème
+  octet `0`) → `10.0.2.0`. Registre à jour dans `README.md`.
+- **Point ouvert, pas encore tranché** : si une stack a un jour besoin de
+  plusieurs URLs Traefik distinctes (donc potentiellement plusieurs adresses
+  sur `net_proxy` pour un seul service), le schéma d'adressage à utiliser
+  n'est pas décidé — alternative envisagée mais non retenue non plus : un
+  relais web local (reverse-proxy interne à la stack) pour ne présenter
+  qu'une seule adresse à Traefik. À trancher avec l'utilisateur quand le
+  premier besoin réel se présente, ne pas improviser une extension du
+  formalisme `10.0.X.Y` sans validation.
 - La stack qui **crée** le réseau partagé le fait sans `external: true` (cf.
   `sc/traefik/compose.yaml`, réseau `proxy`) — elle en est le *bootstrap*, même
   logique que Portainer pour les stacks Docker en général.
-- Nom de ce réseau partagé, en variable dédiée (ex.
+- Nom de ce réseau partagé, en variable dédiée côté créateur (ex.
   `TRAEFIK_PROXY_NETWORK_NAME=net_proxy`) — distinct du `/24` privé de la
   stack (`TRAEFIK_NETWORK_NAME`/`TRAEFIK_NETWORK_SUBNET`), qui reste géré
-  normalement.
+  normalement. Côté stacks qui le **rejoignent**, le nom est en dur
+  (`net_proxy`, constante partagée devant correspondre exactement à ce que
+  `traefik` a créé) plutôt qu'en `${VAR}` — cf. `infra/portainer/compose.yaml`.
 - Un backend **délocalisé** (hors Docker/hors hôte : NAS, autre Pi,
   cluster...) n'a besoin d'aucun réseau partagé — juste d'une IP:port
   joignable (cf. `sc/traefik/dynamic/exemple-delocalise.yml.example`).
 - Cet amendement ne s'applique **qu'aux stacks qui en ont explicitement
-  besoin** (routage/proxy) — la règle par défaut (un `/24` dédié, point)
-  reste la norme pour tout le reste.
+  besoin** (routage/proxy, ou une stack backend qui veut être routée via
+  Traefik) — la règle par défaut (un `/24` dédié, point) reste la norme pour
+  tout le reste.
+
+### Ordre de déploiement
+
+`net_proxy` n'existe qu'une fois la stack `traefik` déployée — toute stack
+qui veut le rejoindre doit donc être déployée (ou redéployée) **après**.
+Ordre concret pour ce repo aujourd'hui : **Portainer** (bootstrap, toujours
+en premier) → **Traefik** (crée `net_proxy`) → **réappliquer le
+`compose.yaml` de Portainer** (`docker compose up -d`, toujours en brut,
+cf. plus haut) pour qu'il rejoigne `net_proxy` à son tour. Pas de
+contournement possible : Compose refuse un réseau `external` introuvable.
 
 ## Comment un projet consomme ce repo
 

@@ -52,7 +52,11 @@ services:
         # Convention d'adressage rpi-stack : .100 = serveur/web, .10 = bdd
         # (ici, un seul conteneur, .100).
         ipv4_address: "${TRAEFIK_NETWORK_IP}"
-      proxy: {}
+      proxy:
+        # IP fixe meme si Traefik n'est jamais une cible routee sur ce
+        # reseau (il en est le createur) -- coherence du plan d'adressage,
+        # formalisme 10.0.X.Y (cf. README.md).
+        ipv4_address: "${TRAEFIK_PROXY_IP}"
 
 networks:
   # Reseau bridge DEDIE a cette stack, sous-reseau propre, TOUJOURS en /24
@@ -74,7 +78,14 @@ networks:
   # (auto-decouverte par labels) le rejoignent en plus de leur propre
   # reseau prive, en declarant ce reseau "external: true" chez elles. Un
   # backend DELOCALISE (autre hote, cf. README) n'a besoin de rien de tout
-  # ca -- provider file + IP:port suffit.
+  # ca -- provider file + IP:port suffit. Sous-reseau FIXE (10.0.0.0/16,
+  # reserve a ce reseau partage, cf. README.md "Plan d'adressage reseau") --
+  # plus laisse a Docker desormais, pour permettre des IP fixes coherentes
+  # aux stacks qui le rejoignent (formalisme 10.0.X.Y).
   proxy:
     name: "${TRAEFIK_PROXY_NETWORK_NAME}"
     driver: bridge
+    ipam:
+      driver: default
+      config:
+        - subnet: "${TRAEFIK_PROXY_NETWORK_SUBNET}"

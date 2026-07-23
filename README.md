@@ -17,39 +17,63 @@ apportées par le projet consommateur (ex. `rpi-nomade`).
 
 Chaque stack a son propre sous-réseau Docker dédié, toujours en `/24` (cf.
 `CLAUDE.md`), alloué depuis un bloc `/16` fixe selon la catégorie du
-service :
+service. Renumérotée le 2026-07-23 pour libérer `10.0.0.0/16` au réseau
+`proxy` partagé (cf. plus bas) :
 
 | Bloc `/16` | Catégorie |
 |---|---|
-| `10.0.0.0/16` | Services d'infrastructure (Portainer, ddclient, monitoring...) |
-| `10.1.0.0/16` | Services communs (partagés entre plusieurs métiers) |
-| `10.2.0.0/16` | Services métiers |
+| `10.0.0.0/16` | Réseau `proxy` partagé (routage, cf. ci-dessous — pas un bloc de `/24` par stack) |
+| `10.1.0.0/16` | Services d'infrastructure (Portainer, ddclient, monitoring...) |
+| `10.2.0.0/16` | Services communs (partagés entre plusieurs métiers) |
+| `10.3.0.0/16` | Services métiers |
 
 Allocations actuelles — **à tenir à jour à chaque nouveau service** :
 
-| Stack | Catégorie | Subnet | Réseau/interface |
-|---|---|---|---|
-| `portainer` | infrastructure | `10.0.0.0/24` | `net_portainer` |
-| `ddclient` | infrastructure | `10.0.1.0/24` | `net_ddclient` |
-| `traefik` | services communs | `10.1.0.0/24` | `net_traefik` |
+| Stack | Catégorie | Subnet privé | Réseau/interface | IP sur `net_proxy` |
+|---|---|---|---|---|
+| `portainer` | infrastructure | `10.1.0.0/24` | `net_portainer` | `10.0.1.0` |
+| `ddclient` | infrastructure | `10.1.1.0/24` | `net_ddclient` | — (ne rejoint pas `net_proxy`) |
+| `traefik` | services communs | `10.2.0.0/24` | `net_traefik` | `10.0.2.0` (créateur du réseau) |
 
-Prochain `/24` libre : `10.0.2.0/24` (infrastructure) ; `10.1.1.0/24`
-(services communs) ; `10.2.0.0/24` (services métiers, bloc encore inutilisé).
+Prochain `/24` libre : `10.1.2.0/24` (infrastructure) ; `10.2.1.0/24`
+(services communs) ; `10.3.0.0/24` (services métiers, bloc encore inutilisé).
 
 ### Réseau `proxy` partagé (routage)
 
 Amendement à la règle « un `/24` par stack » (cf. `CLAUDE.md`) pour les
 stacks de routage type Traefik : en plus de son `/24` privé, ce genre de
-stack **crée** un réseau Docker bridge **partagé** (pas de `/24` dédié,
-Docker lui attribue un sous-réseau libre) que les stacks backend **locales**
-rejoignent **en plus** de leur propre `/24`, en le déclarant `external: true`
-chez elles (auto-découverte par labels via le *provider* Docker de Traefik).
-Un backend **délocalisé** (NAS, autre Pi, cluster...) n'a besoin de rien de
-tout ça — juste une IP:port dans la config `dynamic/`.
+stack **crée** un réseau Docker bridge **partagé** que les stacks backend
+**locales** rejoignent **en plus** de leur propre `/24`, en le déclarant
+`external: true` chez elles (auto-découverte par labels via le *provider*
+Docker de Traefik). Un backend **délocalisé** (NAS, autre Pi, cluster...)
+n'a besoin de rien de tout ça — juste une IP:port dans la config `dynamic/`.
+
+- **Sous-réseau fixe** : `10.0.0.0/16` (plus laissé à l'attribution libre de
+  Docker depuis le 2026-07-23).
+- **Adressage** : `10.0.X.Y`, où `X` = code de catégorie (`1` infra, `2` sc,
+  `3` métier — mêmes chiffres que les blocs `/16` privés) et `Y` = le 3ème
+  octet du `/24` privé du service (sa position dans sa catégorie). Ex.
+  `ddclient` (`10.1.1.0/24` → 3ème octet `1`), s'il rejoignait un jour
+  `net_proxy`, aurait `10.0.1.1`.
+- **Point ouvert, pas encore tranché** : si une stack a besoin de plusieurs
+  URLs Traefik distinctes (donc potentiellement plusieurs adresses sur ce
+  réseau pour un seul service), le schéma à utiliser n'est pas décidé —
+  piste envisagée mais non retenue non plus : un relais web local (reverse-
+  proxy interne à la stack) pour ne présenter qu'une seule adresse à
+  Traefik. À trancher au premier besoin réel.
 
 | Réseau partagé | Créé par | Rejoint par |
 |---|---|---|
-| `net_proxy` | `traefik` | toute stack locale qui veut être routée via Traefik (`external: true`) |
+| `net_proxy` | `traefik` | `portainer` ; toute autre stack locale qui veut être routée via Traefik (`external: true`) |
+
+### Ordre de déploiement
+
+`net_proxy` n'existe qu'une fois `traefik` déployé. Ordre concret :
+**Portainer** (bootstrap, toujours en premier) → **Traefik** (crée
+`net_proxy`) → **réappliquer le `compose.yaml` de Portainer**
+(`docker compose up -d`, toujours en brut) pour qu'il rejoigne `net_proxy` à
+son tour. Compose refuse un réseau `external` introuvable — pas de
+contournement possible sur l'ordre.
 
 #### Rattacher une stack pré-existante à `net_proxy`
 
@@ -113,6 +137,10 @@ Particularités du template :
   wget/curl/shell dedans) et Portainer n'a pas de sous-commande CLI dédiée ;
   un healthcheck HTTP classique est donc impossible sans changer l'image
   (`-alpine`), pas fait ici. Détail en commentaire dans `compose.yaml`.
+- **Rejoint `net_proxy`** en plus de son `/24` privé (labels `traefik.*`,
+  IP fixe dessus) — routable via Traefik, en garde l'accès direct existant
+  en fallback. Nécessite que `traefik` soit déjà déployé (cf. « Ordre de
+  déploiement » ci-dessus) avant de réappliquer ce `compose.yaml`.
 
 Variables requises (voir `infra/portainer/portainer.env.example`) :
 
@@ -125,6 +153,8 @@ Variables requises (voir `infra/portainer/portainer.env.example`) :
 | `PORTAINER_NETWORK_NAME` | Nom de réseau Docker (`net_portainer`) |
 | `PORTAINER_NETWORK_IFACE` | Nom d'interface bridge (`net_portainer`, à garder identique par convention) |
 | `PORTAINER_DATA_DIR` | Chemin hôte pour la persistance des données |
+| `PORTAINER_PROXY_IP` | IP fixe sur `net_proxy` (`10.0.1.0`, formalisme `10.0.X.Y`) |
+| `PORTAINER_TRAEFIK_HOST` | Nom d'hôte pour le routage Traefik (label `Host(...)`) |
 
 Secrets requis (voir `infra/portainer/secrets.example/`) :
 
@@ -210,6 +240,8 @@ Variables requises (voir `sc/traefik/traefik.env.example`) :
 | `TRAEFIK_NETWORK_NAME` | Nom de réseau Docker (`net_traefik`) |
 | `TRAEFIK_NETWORK_IFACE` | Nom d'interface bridge (`net_traefik`, à garder identique par convention) |
 | `TRAEFIK_PROXY_NETWORK_NAME` | Nom du réseau partagé de routage (`net_proxy`), créé par cette stack |
+| `TRAEFIK_PROXY_NETWORK_SUBNET` | Sous-réseau fixe du réseau partagé (`10.0.0.0/16`) |
+| `TRAEFIK_PROXY_IP` | IP fixe de Traefik lui-même sur `net_proxy` (`10.0.2.0`, formalisme `10.0.X.Y`) |
 
 ---
 

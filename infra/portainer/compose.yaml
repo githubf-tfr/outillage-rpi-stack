@@ -39,6 +39,19 @@ services:
       # pour ses ports publies -- chaine FORWARD/DNAT) : preferer l'IP d'une
       # interface d'administration dediee. Cf. portainer.env.example.
       - "${PORTAINER_BIND_ADDR}:9000:9000"
+    # Route Portainer via Traefik en plus de l'acces direct ci-dessus (garde
+    # les deux : direct = fallback si Traefik est down, Traefik = acces
+    # normal en TLS). Necessite que la stack traefik existe DEJA (net_proxy
+    # cree par elle) -- deployer Portainer, puis traefik, PUIS reappliquer
+    # ce compose.yaml (cf. README.md, "Rattacher une stack pre-existante a
+    # net_proxy" -- Portainer suit sa propre regle : toujours docker compose
+    # up -d brut, jamais via l'API Portainer lui-meme).
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.portainer.rule=Host(`${PORTAINER_TRAEFIK_HOST}`)"
+      - "traefik.http.routers.portainer.entrypoints=websecure"
+      - "traefik.http.routers.portainer.tls.certresolver=letsencrypt"
+      - "traefik.http.services.portainer.loadbalancer.server.port=9000"
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
       - portainer_data:/data
@@ -48,6 +61,10 @@ services:
         # pour d'eventuelles regles pare-feu/monitoring, pas de dependance a
         # la DNS interne Docker.
         ipv4_address: "${PORTAINER_NETWORK_IP}"
+      proxy:
+        # IP fixe sur le reseau partage, formalisme 10.0.X.Y (cf.
+        # portainer.env.example et README.md).
+        ipv4_address: "${PORTAINER_PROXY_IP}"
 
 networks:
   # Reseau bridge DEDIE (pas le bridge par defaut de compose) : nom
@@ -65,6 +82,14 @@ networks:
       driver: default
       config:
         - subnet: "${PORTAINER_NETWORK_SUBNET}"
+  # Reseau PARTAGE de routage, CREE par la stack traefik (cf. son
+  # compose.yaml) -- Portainer le rejoint en plus de son /24 prive pour
+  # etre routable via Traefik. Nom en dur "net_proxy" (constante partagee
+  # par toutes les stacks qui le rejoignent, doit correspondre exactement
+  # au nom cree par traefik -- cf. README.md "Reseau proxy partage").
+  proxy:
+    external: true
+    name: net_proxy
 
 secrets:
   # Hash bcrypt du mot de passe admin Portainer -- genere avec bcrypt,
