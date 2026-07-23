@@ -256,9 +256,13 @@ Consommateurs connus : `rpi-nomade`
 
 ## Dépôt GitHub
 
-- **URL** : https://github.com/githubf-tfr/outillage-rpi-stack
+- **URL** : https://github.com/githubf-tfr/rpi-stack
 - **Branche principale** : `main` (unique branche, tout va sur `main`)
 - Créé le 2026-07-22, premier commit : template Portainer bootstrap.
+  Renommé de `outillage-rpi-stack` à `rpi-stack` le 2026-07-23 — mauvais nom
+  posé par erreur lors de la création du repo (une session Claude
+  précédente), la convention réelle est `rpi-stack` seul, sans préfixe
+  `outillage-`.
 
 ## `CLAUDE.md` vs `README.md`
 
