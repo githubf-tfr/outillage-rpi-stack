@@ -1,0 +1,67 @@
+# socle/adguard/compose.yaml -- template generique de stack AdGuard Home
+# (DNS + DHCP pour les clients du reseau de l'AP). Aucune valeur ici : tout
+# passe par ${VAR}, resolues par le consommateur (fichier .env depose a cote
+# via docker_compose_stack_env_file, ou Environment variables de la Stack
+# Portainer -- cf. CLAUDE.md de ce repo).
+#
+# DEROGATION au plan d'adressage reseau de ce repo (cf. CLAUDE.md
+# "Derogation reseau : network_mode: host" et README.md) : cette stack n'a
+# NI /24 dedie NI reseau Docker bridge -- network_mode: host, incompatible
+# en Compose avec "networks:"/"ports:" sur le meme service. Le serveur DHCP
+# d'AdGuard Home doit emettre en broadcast sur le segment L2 physique du
+# reseau de l'AP ; un bridge Docker isole ne le permet pas. Cf. wiki
+# officiel AdguardTeam/AdGuardHome, section Docker : "If you want to use
+# AdGuardHome's DHCP server, you should pass --network host" (Linux
+# uniquement).
+
+services:
+  adguard:
+    image: adguard/adguardhome:latest
+    # Nom de conteneur = variable, formalisme nomdelastack_xxx (juste
+    # "nomdelastack" si un seul conteneur dans la stack -- cas ici).
+    container_name: "${ADGUARD_CONTAINER_NAME}"
+    restart: always
+    network_mode: host
+    # Necessaire au serveur DHCP (acces bas niveau a l'interface reseau pour
+    # l'emission en broadcast) -- repris du compose historique cote
+    # rpi-nomade (services/adguard/, anterieur a la scission avec ce repo),
+    # qui fonctionnait en production avec ce cap. Non liste comme requis par
+    # le wiki officiel AdGuard Home ; garde ici par prudence (comportement
+    # deja valide) plutot que retire sans preuve du contraire.
+    cap_add:
+      - NET_ADMIN
+    # Pas de healthcheck : le HEALTHCHECK integre a l'image officielle a ete
+    # retire en amont en v0.107.34 (trop de faux positifs, cf. discussion
+    # GitHub AdguardTeam/AdGuardHome#5939) et l'image finale (alpine:latest +
+    # seulement ca-certificates) n'embarque ni wget ni curl pour en refaire
+    # un cote rpi-stack -- rien de fiable a sonder depuis l'interieur du
+    # conteneur.
+    #
+    # Pas de "ports:" : network_mode: host expose directement sur l'hote les
+    # ports ecoutes par AdGuard Home (mapping Compose ni possible ni
+    # necessaire) -- lesquels dependent de sa config interne (UI web, DNS
+    # 53/tcp+udp, DHCP 67/udp si active, DoT/DoQ...), a gerer cote pare-feu
+    # de l'hote directement, hors perimetre de ce compose.yaml.
+    volumes:
+      - adguard_work:/opt/adguardhome/work
+      - adguard_conf:/opt/adguardhome/conf
+
+volumes:
+  # Volumes nommes, backes par un bind explicite -- meme pattern que
+  # portainer_data (cf. socle/portainer/compose.yaml) : donnees hors de
+  # /var/lib/docker, sur une partition dediee aux donnees de stacks.
+  # ATTENTION : `o: bind` ne cree PAS le dossier hote tout seul --
+  # ADGUARD_WORK_DIR/ADGUARD_CONF_DIR doivent deja exister avant le
+  # `docker compose up`.
+  adguard_work:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: "${ADGUARD_WORK_DIR}"
+  adguard_conf:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: "${ADGUARD_CONF_DIR}"

@@ -70,11 +70,14 @@ rpi-stack/
 │   │   ├── compose.yaml            # template, ${VAR} uniquement
 │   │   ├── ddclient.env.example    # modele des valeurs non secretes
 │   │   └── ddclient.conf.example   # modele du fichier de config complet (voir note ci-dessous)
-│   └── traefik/
-│       ├── compose.yaml            # template, ${VAR} uniquement
-│       ├── traefik.env.example     # modele des valeurs non secretes
-│       ├── traefik.yml.example     # modele de la config statique (voir note ci-dessous)
-│       └── dynamic/                # modeles de config dynamique (routes), voir "Reseau proxy partage"
+│   ├── traefik/
+│   │   ├── compose.yaml            # template, ${VAR} uniquement
+│   │   ├── traefik.env.example     # modele des valeurs non secretes
+│   │   ├── traefik.yml.example     # modele de la config statique (voir note ci-dessous)
+│   │   └── dynamic/                # modeles de config dynamique (routes), voir "Reseau proxy partage"
+│   └── adguard/
+│       ├── compose.yaml            # template, ${VAR} uniquement -- network_mode: host, voir "Derogation reseau"
+│       └── adguard.env.example     # modele des valeurs non secretes
 └── metier/                         # vide pour l'instant -- premier service metier ici
 ```
 
@@ -226,6 +229,39 @@ juste après, en 2ème. Aujourd'hui, aucune stack n'a besoin de rejoindre
 `net_proxy` (Portainer utilise le provider file, cf. ci-dessus) — cette
 contrainte d'ordre ne s'applique pour l'instant qu'à un futur service qui en
 aurait explicitement besoin.
+
+## Dérogation réseau : `network_mode: host` (AdGuard Home)
+
+Décidé le 2026-07-24, à l'occasion de `socle/adguard/`. Deuxième dérogation
+à la règle « chaque stack a son propre `/24` » (cf. « Conventions des
+`compose.yaml` » plus haut), de nature différente de l'amendement
+`net_proxy` ci-dessus : celui-là **ajoute** un réseau en plus du `/24`
+privé, celui-ci **retire** le réseau Docker de la stack entièrement.
+
+Le serveur DHCP d'AdGuard Home doit émettre en broadcast sur le segment L2
+physique du réseau de l'AP (`rpi-nomade`) — un réseau bridge Docker isolé ne
+le permet pas (cf. wiki officiel `AdguardTeam/AdGuardHome`, section Docker :
+« If you want to use AdGuardHome's DHCP server, you should pass --network
+host », Linux uniquement). Compose interdit par ailleurs de combiner
+`network_mode: host` avec `networks:`/`ports:` sur le même service — la
+stack `socle/adguard/` n'a donc **ni** `/24` dédié, **ni** IP fixe, **ni**
+`net_xxx`, contrairement à toutes les autres stacks de ce repo :
+
+- Pas de bloc `networks:` (ni service, ni top-level) dans
+  `socle/adguard/compose.yaml`, pas de `ports:` non plus.
+- Les ports réellement écoutés par AdGuard Home (UI web, DNS 53, DHCP
+  67/udp si activé...) sont ceux de l'hôte directement, configurés dans
+  AdGuard Home lui-même (assistant de première configuration côté UI web) —
+  hors périmètre Compose/`.env` de ce repo.
+- N'apparaît pas dans le tableau d'allocation `/24` de `README.md`
+  (« Plan d'adressage réseau ») — une ligne « — » y renvoie ici.
+
+Traitement documentaire choisi, sur le même principe que « Pourquoi
+Portainer n'est pas sur `net_proxy` » ci-dessus (dérogation fonctionnelle
+documentée à part plutôt que silencieuse) : la dérogation vit en commentaire
+en tête de `socle/adguard/compose.yaml` et dans cette section — pas dans
+l'arborescence (`socle/adguard/` reste un dossier de service normal, 1
+dossier = 1 service, même sans les fichiers réseau habituels).
 
 ## Comment un projet consomme ce repo
 

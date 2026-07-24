@@ -34,9 +34,11 @@ Allocations actuelles — **à tenir à jour à chaque nouveau service** :
 | `portainer` | socle | `10.1.0.0/24` | `net_portainer` | — (routé via provider file, pas `net_proxy` — cf. ci-dessous) |
 | `ddclient` | socle | `10.1.1.0/24` | `net_ddclient` | — (pas d'interface web, rien à router) |
 | `traefik` | socle | `10.1.2.0/24` | `net_traefik` | `10.0.1.2` (créateur du réseau) |
+| `adguard` | socle | — (`network_mode: host`, pas de `/24` — cf. « Dérogation réseau » ci-dessous) | — | — (aucun réseau Docker) |
 
 Prochain `/24` libre : `10.1.3.0/24` (socle) ; `10.2.0.0/24` (services
-métiers, bloc encore inutilisé).
+métiers, bloc encore inutilisé). `adguard` ne consomme aucun `/24` (cf.
+ci-dessous), la numérotation n'est donc pas affectée par son ajout.
 
 ### Réseau `proxy` partagé (routage)
 
@@ -137,6 +139,28 @@ networks:
 - **Dans les deux cas** : `net_proxy` doit déjà exister sur l'hôte (donc la
   stack `traefik` déjà déployée) avant l'update — sinon ça échoue en
   cherchant un réseau externe introuvable.
+
+### Dérogation réseau : `network_mode: host` (AdGuard Home)
+
+Décidé le 2026-07-24, à l'occasion de `socle/adguard/`. Deuxième dérogation
+à la règle « chaque stack a son propre `/24` », différente de l'amendement
+`net_proxy` ci-dessus : celui-là **ajoute** un réseau en plus du `/24`
+privé, celui-ci **retire** le réseau Docker de la stack entièrement.
+
+Le serveur DHCP d'AdGuard Home doit émettre en broadcast sur le segment L2
+physique du réseau de l'AP (`rpi-nomade`) — un réseau bridge Docker isolé ne
+le permet pas (cf. wiki officiel `AdguardTeam/AdGuardHome`, section Docker :
+« If you want to use AdGuardHome's DHCP server, you should pass --network
+host », Linux uniquement). Compose interdit par ailleurs de combiner
+`network_mode: host` avec `networks:`/`ports:` sur le même service —
+`socle/adguard/` n'a donc ni `/24` dédié, ni IP fixe, ni `net_xxx`,
+contrairement à toutes les autres stacks de ce repo (pas de bloc
+`networks:` ni de `ports:` dans son `compose.yaml`). Les ports réellement
+écoutés par AdGuard Home (UI web, DNS 53, DHCP 67/udp si activé...) sont
+ceux de l'hôte directement, configurés dans AdGuard Home lui-même
+(assistant de première configuration sur l'UI web) — hors périmètre
+Compose/`.env` de ce repo. Détail complet : `CLAUDE.md`, section
+« Dérogation réseau : `network_mode: host` ».
 
 ---
 
@@ -275,6 +299,53 @@ Secrets requis (voir `socle/traefik/secrets.example/`) :
 | Fichier | Contenu |
 |---|---|
 | `secrets/ovh_dns.env` | Identifiants API OVH (`OVH_ENDPOINT`/`OVH_APPLICATION_KEY`/`OVH_APPLICATION_SECRET`/`OVH_CONSUMER_KEY`) pour le provider DNS-01 "ovh" de lego — DIFFÉRENTS des identifiants DynHost de `ddclient` ; sans effet si `dnsChallenge` n'est pas activé dans `traefik.yml` |
+
+---
+
+### `socle/adguard/` — AdGuard Home (DNS + DHCP)
+
+Résolveur DNS (filtrage pub/tracking) et, en option, serveur DHCP pour les
+clients du réseau de l'AP `rpi-nomade`. Image officielle
+`adguard/adguardhome`.
+
+Particularités du template :
+
+- **`network_mode: host`, pas de `/24` dédié** — dérogation au plan
+  d'adressage réseau de ce repo (cf. « Dérogation réseau :
+  `network_mode: host` » plus haut) : le serveur DHCP doit émettre en
+  broadcast sur le segment L2 physique, ce qu'un bridge Docker isolé ne
+  permet pas. Ni `networks:`, ni `ports:`, ni IP fixe dans `compose.yaml` —
+  incompatibles avec `network_mode: host` en Compose.
+- `cap_add: NET_ADMIN` — nécessaire au serveur DHCP (accès bas niveau à
+  l'interface réseau) ; repris du compose historique côté `rpi-nomade`
+  (`services/adguard/`, antérieur à la scission avec ce repo), qui
+  fonctionnait en production avec ce cap — non listé comme requis par le
+  wiki officiel AdGuard Home, gardé par prudence plutôt que retiré sans
+  preuve du contraire.
+- **Pas de `healthcheck`** — le `HEALTHCHECK` intégré à l'image officielle a
+  été retiré en amont en v0.107.34 (trop de faux positifs, cf. discussion
+  GitHub `AdguardTeam/AdGuardHome#5939`) et l'image finale (`alpine:latest`
+  + seulement `ca-certificates`) n'embarque ni `wget` ni `curl` pour en
+  refaire un côté `rpi-stack`. Détail en commentaire dans `compose.yaml`.
+- Deux volumes nommés backés par bind (même pattern que `portainer_data`) :
+  `work/` (état runtime — cache DNS, statistiques, logs de requêtes) et
+  `conf/` (configuration, `AdGuardHome.yaml`). **Pas de `.example` pour
+  `AdGuardHome.yaml`** — contrairement à `ddclient.conf`/`traefik.yml`, ce
+  fichier n'est pas fourni par ce repo : AdGuard Home le génère lui-même via
+  l'assistant de première configuration (UI web, port `3000` par défaut) ;
+  le consommateur le gère ensuite directement dans `ADGUARD_CONF_DIR`.
+
+Variables requises (voir `socle/adguard/adguard.env.example`) :
+
+| Variable | Rôle |
+|---|---|
+| `ADGUARD_CONTAINER_NAME` | Nom du conteneur (`adguard`, un seul conteneur dans la stack) |
+| `ADGUARD_WORK_DIR` | Chemin hôte pour l'état runtime (cache DNS, statistiques, logs) |
+| `ADGUARD_CONF_DIR` | Chemin hôte pour la configuration (`AdGuardHome.yaml`, généré par AdGuard Home lui-même) |
+
+Pas de secrets — pas de `secrets.example/` dans ce dossier (mot de passe
+admin défini via l'assistant de première configuration, stocké haché dans
+`AdGuardHome.yaml` sous `ADGUARD_CONF_DIR`).
 
 ---
 
